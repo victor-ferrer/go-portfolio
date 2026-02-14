@@ -41,19 +41,31 @@ func ProjectOpenPositions(ctx context.Context, events []domain.Event) (map[strin
 			}
 		}
 
-		// Update position based on transaction category
+		// Update position based on transaction category and type
 		if event.Payload.Category == "Trade" {
-			// Extract quantity from Amount (for now, using Amount as quantity)
-			// In a real implementation, this would come from a dedicated Quantity field
-			quantity := event.Payload.Amount
+			// Determine if buy or sell based on Type field
+			isBuy := event.Payload.Type == "buy"
+			quantity := event.Payload.Quantity
+			if !isBuy {
+				quantity = -event.Payload.Quantity // Negative for sells
+			}
 
-			// Update total cost and quantity
-			position.TotalCost += event.Payload.Amount * event.Payload.Amount // Amount as both price and qty for now
-			position.Quantity += quantity
+			// Update total cost (only increases for buys, decreases for sells)
+			if isBuy {
+				position.TotalCost += event.Payload.Amount
+				position.Quantity += quantity
 
-			// Recalculate average cost
-			if position.Quantity > 0 {
-				position.AverageCost = position.TotalCost / position.Quantity
+				// Recalculate average cost based on new total cost and quantity
+				if position.Quantity > 0 {
+					position.AverageCost = position.TotalCost / position.Quantity
+				}
+			} else {
+				// Sell transaction
+				position.Quantity += quantity // quantity is negative
+				if position.Quantity < 0 {
+					position.Quantity = 0 // Can't have negative holdings
+				}
+				// Don't reduce total cost on sells - maintains cost basis for gain calculation
 			}
 		}
 		// Corporate actions typically don't change cost basis in the same way
@@ -62,18 +74,24 @@ func ProjectOpenPositions(ctx context.Context, events []domain.Event) (map[strin
 		positions[instrument] = position
 	}
 
+	// Calculate current values (assuming average cost as current price for now)
+	for instrument, position := range positions {
+		position.CurrentValue = position.Quantity * position.AverageCost
+		positions[instrument] = position
+	}
+
 	return positions, nil
 }
 
 // ProjectAnnualizedReturn calculates annualized return since first investment.
+// Return = (Current Value - Total Invested) / Total Invested, annualized
 func ProjectAnnualizedReturn(ctx context.Context, events []domain.Event, position Position) float64 {
-	if len(events) == 0 || position.Quantity == 0 {
+	if len(events) == 0 || position.TotalCost == 0 {
 		return 0
 	}
 
-	// Find first and last trade dates
+	// Find first and last trade dates for this position
 	var firstDate, lastDate time.Time
-	totalInvested := 0.0
 
 	for _, event := range events {
 		if event.AggregateID != position.Instrument || event.Payload.Category != "Trade" {
@@ -84,32 +102,29 @@ func ProjectAnnualizedReturn(ctx context.Context, events []domain.Event, positio
 			firstDate = event.Payload.CreatedAt
 		}
 		lastDate = event.Payload.CreatedAt
-
-		// Accumulate invested amount (cost basis)
-		totalInvested += event.Payload.Amount
 	}
 
-	if firstDate.IsZero() || totalInvested == 0 {
+	if firstDate.IsZero() {
 		return 0
 	}
 
-	// Calculate time held in years
+	// If no time has passed, set to 1 year to avoid division by zero
 	daysHeld := lastDate.Sub(firstDate).Hours() / 24
 	yearsHeld := daysHeld / 365.25
-	if yearsHeld == 0 {
-		yearsHeld = 1 // Avoid division by zero
+	if yearsHeld <= 0 {
+		yearsHeld = 1
 	}
 
-	// Calculate current value (simplified: current price = average cost for now)
+	// Calculate current value (quantity × average cost)
 	currentValue := position.Quantity * position.AverageCost
 
 	// Calculate simple return
-	totalReturn := (currentValue - totalInvested) / totalInvested
+	totalReturn := (currentValue - position.TotalCost) / position.TotalCost
 	if math.IsNaN(totalReturn) || math.IsInf(totalReturn, 0) {
 		return 0
 	}
 
-	// Annualize the return
+	// Annualize the return: (1 + totalReturn)^(1/yearsHeld) - 1
 	annualizedReturn := math.Pow(1+totalReturn, 1/yearsHeld) - 1
 
 	if math.IsNaN(annualizedReturn) || math.IsInf(annualizedReturn, 0) {
@@ -119,17 +134,17 @@ func ProjectAnnualizedReturn(ctx context.Context, events []domain.Event, positio
 	return annualizedReturn
 }
 
-// CalculatePortfolioMetrics aggregates metrics across all positions.
+// PortfolioMetrics aggregates metrics across all positions.
 type PortfolioMetrics struct {
-	TotalValue         float64
-	TotalCost          float64
-	UnrealizedGain     float64
-	UnrealizedGainPct  float64
-	AnnualizedReturn   float64
-	PositionCount      int
+	TotalValue        float64
+	TotalCost         float64
+	UnrealizedGain    float64
+	UnrealizedGainPct float64
+	AnnualizedReturn  float64
+	PositionCount     int
 }
 
-// ProjectPortfolioMetrics calculates aggregated portfolio metrics.
+// ProjectPortfolioMetrics calculates aggregated portfolio metrics from all positions.
 func ProjectPortfolioMetrics(ctx context.Context, events []domain.Event, positions map[string]Position) (PortfolioMetrics, error) {
 	metrics := PortfolioMetrics{}
 
@@ -144,8 +159,8 @@ func ProjectPortfolioMetrics(ctx context.Context, events []domain.Event, positio
 		metrics.UnrealizedGainPct = (metrics.UnrealizedGain / metrics.TotalCost) * 100
 	}
 
-	// Calculate portfolio-wide annualized return (weighted average)
-	if metrics.PositionCount > 0 {
+	// Calculate portfolio-wide annualized return (weighted by cost basis)
+	if metrics.PositionCount > 0 && metrics.TotalCost > 0 {
 		totalAnnualized := 0.0
 		for _, position := range positions {
 			// Get events for this position
@@ -155,6 +170,8 @@ func ProjectPortfolioMetrics(ctx context.Context, events []domain.Event, positio
 					positionEvents = append(positionEvents, event)
 				}
 			}
+
+			// Weight by proportion of total cost
 			weight := position.TotalCost / metrics.TotalCost
 			annualized := ProjectAnnualizedReturn(ctx, positionEvents, position)
 			totalAnnualized += annualized * weight

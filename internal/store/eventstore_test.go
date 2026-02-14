@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -10,9 +11,9 @@ import (
 
 func TestUniquenessKeyComputation(t *testing.T) {
 	date := time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)
-	key1 := domain.ComputeUniquenessKey(date, "AAPL", "Trade", 100.5)
-	key2 := domain.ComputeUniquenessKey(date, "AAPL", "Trade", 100.5)
-	key3 := domain.ComputeUniquenessKey(date, "AAPL", "Trade", 100.6)
+	key1 := domain.ComputeUniquenessKey(date, "AAPL", "Trade", 100.5, 5000.0)
+	key2 := domain.ComputeUniquenessKey(date, "AAPL", "Trade", 100.5, 5000.0)
+	key3 := domain.ComputeUniquenessKey(date, "AAPL", "Trade", 100.6, 5000.0)
 
 	if key1 != key2 {
 		t.Errorf("same inputs should produce same key, got %s and %s", key1, key2)
@@ -24,6 +25,11 @@ func TestUniquenessKeyComputation(t *testing.T) {
 }
 
 func TestEventStoreAppendAndRetrieve(t *testing.T) {
+	// Skip if CGO not enabled
+	if isSkipCGOTests() {
+		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
+	}
+
 	ctx := context.Background()
 	store, err := NewSQLiteEventStore(":memory:")
 	if err != nil {
@@ -33,7 +39,8 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 
 	tx := domain.Transaction{
 		ID:         "tx-1",
-		Amount:     100.0,
+		Amount:     5000.0,
+		Quantity:   100.0,
 		Type:       "buy",
 		Category:   "Trade",
 		Instrument: "AAPL",
@@ -47,7 +54,7 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 		Broker:        "ClickTrade",
 		ImportedAt:    time.Now(),
 		Payload:       tx,
-		UniquenessKey: domain.ComputeUniquenessKey(tx.CreatedAt, "AAPL", "Trade", 100.0),
+		UniquenessKey: domain.ComputeUniquenessKey(tx.CreatedAt, "AAPL", "Trade", tx.Quantity, tx.Amount),
 	}
 
 	if err := store.AppendEvent(ctx, event); err != nil {
@@ -66,9 +73,18 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 	if events[0].Payload.ID != "tx-1" {
 		t.Errorf("expected transaction ID tx-1, got %s", events[0].Payload.ID)
 	}
+
+	if events[0].Payload.Quantity != 100.0 {
+		t.Errorf("expected quantity 100.0, got %f", events[0].Payload.Quantity)
+	}
 }
 
 func TestEventStoreDeduplication(t *testing.T) {
+	// Skip if CGO not enabled
+	if isSkipCGOTests() {
+		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
+	}
+
 	ctx := context.Background()
 	store, err := NewSQLiteEventStore(":memory:")
 	if err != nil {
@@ -76,16 +92,18 @@ func TestEventStoreDeduplication(t *testing.T) {
 	}
 	defer store.Close()
 
-	uniquenessKey := domain.ComputeUniquenessKey(time.Now(), "AAPL", "Trade", 100.0)
+	now := time.Now()
+	uniquenessKey := domain.ComputeUniquenessKey(now, "AAPL", "Trade", 100.0, 5000.0)
 
 	tx := domain.Transaction{
 		ID:         "tx-1",
-		Amount:     100.0,
+		Amount:     5000.0,
+		Quantity:   100.0,
 		Type:       "buy",
 		Category:   "Trade",
 		Instrument: "AAPL",
 		Currency:   "USD",
-		CreatedAt:  time.Now(),
+		CreatedAt:  now,
 	}
 
 	event := domain.Event{
@@ -119,6 +137,11 @@ func TestEventStoreDeduplication(t *testing.T) {
 }
 
 func TestEventStoreByBroker(t *testing.T) {
+	// Skip if CGO not enabled
+	if isSkipCGOTests() {
+		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
+	}
+
 	ctx := context.Background()
 	store, err := NewSQLiteEventStore(":memory:")
 	if err != nil {
@@ -129,8 +152,9 @@ func TestEventStoreByBroker(t *testing.T) {
 	// Insert events from different brokers
 	for i, broker := range []string{"ClickTrade", "Degiro", "ClickTrade"} {
 		tx := domain.Transaction{
-			ID:         string(rune(i)),
-			Amount:     100.0,
+			ID:         "tx-" + strconv.Itoa(i),
+			Amount:     5000.0,
+			Quantity:   100.0,
 			Type:       "buy",
 			Category:   "Trade",
 			Instrument: "AAPL",
@@ -144,7 +168,7 @@ func TestEventStoreByBroker(t *testing.T) {
 			Broker:        broker,
 			ImportedAt:    time.Now(),
 			Payload:       tx,
-			UniquenessKey: domain.ComputeUniquenessKey(time.Now(), "AAPL", "Trade", float64(i)),
+			UniquenessKey: domain.ComputeUniquenessKey(time.Now(), "AAPL", "Trade", float64(i), 5000.0),
 		}
 
 		if err := store.AppendEvent(ctx, event); err != nil {
@@ -169,6 +193,11 @@ func TestEventStoreByBroker(t *testing.T) {
 }
 
 func TestEventStoreGetAllEvents(t *testing.T) {
+	// Skip if CGO not enabled
+	if isSkipCGOTests() {
+		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
+	}
+
 	ctx := context.Background()
 	store, err := NewSQLiteEventStore(":memory:")
 	if err != nil {
@@ -179,8 +208,9 @@ func TestEventStoreGetAllEvents(t *testing.T) {
 	// Insert 3 events
 	for i := 0; i < 3; i++ {
 		tx := domain.Transaction{
-			ID:         string(rune(i)),
-			Amount:     100.0,
+			ID:         "tx-" + strconv.Itoa(i),
+			Amount:     5000.0,
+			Quantity:   100.0,
 			Type:       "buy",
 			Category:   "Trade",
 			Instrument: "AAPL",
@@ -194,7 +224,7 @@ func TestEventStoreGetAllEvents(t *testing.T) {
 			Broker:        "ClickTrade",
 			ImportedAt:    time.Now(),
 			Payload:       tx,
-			UniquenessKey: domain.ComputeUniquenessKey(time.Now(), "AAPL", "Trade", float64(i)),
+			UniquenessKey: domain.ComputeUniquenessKey(time.Now(), "AAPL", "Trade", float64(i), 5000.0),
 		}
 
 		if err := store.AppendEvent(ctx, event); err != nil {
