@@ -241,3 +241,16 @@ func TestEventStoreGetAllEvents(t *testing.T) {
 		t.Errorf("expected 3 events, got %d", len(events))
 	}
 }
+
+// isSkipCGOTests checks if CGO is disabled and tests should be skipped.
+// This is a best-effort check since we can't reliably detect CGO_ENABLED at runtime
+// for the go-sqlite3 driver. If this returns true, tests are skipped.
+func isSkipCGOTests() bool {
+	// Try to ping a test database - if it fails with CGO message, skip
+	// For now, we'll attempt to create a store and check the error
+	_, err := NewSQLiteEventStore(":memory:")
+	if err != nil && err.Error() == "failed to ping database: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub" {
+		return true
+	}
+	return false
+}
