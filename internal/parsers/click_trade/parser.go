@@ -105,6 +105,16 @@ func (p *Parser) parseRow(record []string, columnIndex map[string]int) (domain.T
 		tx.Category = strings.TrimSpace(record[idx])
 	}
 
+	// Quantity - extract from "Quantity" column or derive from Amount and Price
+	if idx, ok := columnIndex["Quantity"]; ok && idx < len(record) {
+		quantityStr := strings.TrimSpace(record[idx])
+		quantityStr = strings.ReplaceAll(quantityStr, ",", ".")
+		quantity, err := strconv.ParseFloat(quantityStr, 64)
+		if err == nil {
+			tx.Quantity = quantity
+		}
+	}
+
 	// Description from Comment or Instrument Symbol
 	if idx, ok := columnIndex["Comment"]; ok && idx < len(record) {
 		tx.Description = strings.TrimSpace(record[idx])

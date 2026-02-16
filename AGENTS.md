@@ -42,7 +42,7 @@ events table:
 - Uniqueness key enforced at DB level (UNIQUE constraint on uniquenessKey)
 - On duplicate: log warning + return nil (idempotent no-op)
 
-### 2. Event Model
+### 2. Event Model & Uniqueness Key
 - **File**: `internal/domain/event.go`
 - Define `Event` struct:
   ```go
@@ -53,30 +53,54 @@ events table:
     Broker        string        // metadata
     ImportedAt    time.Time     // metadata
     Payload       Transaction   // the actual transaction data
-    UniquenessKey string        // hash(date + instrument + type + quantity)
+    UniquenessKey string        // hash(date + instrument + category + quantity + amount)
     CreatedAt     time.Time
   }
   ```
-- Helper function: `ComputeUniquenessKey(date, instrument, category, quantity) string`
+- Helper function: `ComputeUniquenessKey(date, instrument, category, quantity, amount) string`
+  - Uses high-precision float formatting (`%.15g`) to avoid hash collisions
+  - Includes both quantity and amount to distinguish similar transactions
 
-### 3. Parser Integration
-- **File**: `internal/parsers/click_trade/parser.go` (already updated)
-- Parser maps CSV "Event" field → `domain.Transaction.Category` ("Trade" or "Corporate Action")
-- Create `ParseAndStore(ctx context.Context, brokerName string, data io.Reader, store EventStore) error`
-  - Parse transactions
-  - Compute uniqueness keys using date + instrument + category + quantity
+### 3. Transaction Model Enhancement
+- **File**: `internal/domain/transaction.go`
+- Add `Quantity float64` field (number of instruments traded)
+- Update field semantics:
+  - `Amount`: Total transaction value (price × quantity)
+  - `Quantity`: Number of instruments/shares traded
+  - `Type`: "buy" or "sell" (indicates direction of trade)
+  - `Category`: "Trade" or "Corporate Action" (from Event field)
+
+### 4. Parser Integration
+- **File**: `internal/parsers/parser.go` (new generic parser wrapper)
+- Create `ParseAndStore(ctx context.Context, brokerName string, parser Parser, data io.Reader, store EventStore) error`
+  - Parse transactions using broker-specific parser
+  - Validate required fields (Instrument must be populated)
+  - Compute uniqueness keys using date + instrument + category + quantity + amount
   - Append events to store
   - Log duplicates with warning, continue processing
 
-### 4. Projection: Open Positions
+### 5. Click Trade Parser Update
+- **File**: `internal/parsers/click_trade/parser.go`
+- Extract `Quantity` from CSV "Quantity" column
+- Map CSV "Event" field → `domain.Transaction.Category`
+- Ensure `Type` field reflects buy/sell transaction direction
+
+### 6. Projection: Open Positions
 - **File**: `internal/projections/positions.go`
 - Function: `ProjectOpenPositions(ctx context.Context, events []Event) (map[string]Position, error)`
   - Aggregate events by instrument
-  - Calculate quantity, average cost, current value
+  - For buy transactions: increase quantity and cost basis
+  - For sell transactions: decrease quantity, preserve cost basis for gain calculations
+  - Calculate average cost (total_cost / quantity), current value (quantity × average_cost)
   - Return map[instrument]Position
 - Function: `ProjectAnnualizedReturn(ctx context.Context, events []Event, position Position) float64`
   - Calculate return since first investment in instrument
-  - Annualize the return
+  - Formula: (current_value - total_invested) / total_invested, annualized
+  - Annualize using compound growth formula
+- Function: `ProjectPortfolioMetrics(ctx context.Context, events []Event, positions map[string]Position) PortfolioMetrics`
+  - Aggregate metrics across all positions
+  - Calculate total value, total cost, unrealized gains
+  - Weight-average annualized returns by cost basis proportion
 
 ### 5. Database Setup
 - **File**: `internal/store/migrations.go`
@@ -86,7 +110,9 @@ events table:
 ## Key Behaviors
 
 ### Deduplication
-- **Uniqueness Key**: `SHA256(date + "|" + instrument + "|" + category + "|" + quantity)`
+- **Uniqueness Key**: `SHA256(date + "|" + instrument + "|" + category + "|" + quantity + "|" + amount)`
+  - High-precision float formatting (`%.15g`) prevents collisions from rounding
+  - Includes both quantity and amount to distinguish similar transactions
 - **Enforcement**: Database UNIQUE constraint on uniquenessKey column
 - **On Duplicate**: Log warning, skip silently (idempotent)
 - **Recovery**: Importing same file twice = no-op
