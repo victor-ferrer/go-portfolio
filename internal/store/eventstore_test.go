@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -31,7 +34,8 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	store, err := NewSQLiteEventStore(":memory:", "")
+	migrationsPath := getMigrationsPath(t)
+	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
 	if err != nil {
 		t.Fatalf("failed to create event store: %v", err)
 	}
@@ -86,7 +90,8 @@ func TestEventStoreDeduplication(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	store, err := NewSQLiteEventStore(":memory:", "")
+	migrationsPath := getMigrationsPath(t)
+	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
 	if err != nil {
 		t.Fatalf("failed to create event store: %v", err)
 	}
@@ -143,7 +148,8 @@ func TestEventStoreByBroker(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	store, err := NewSQLiteEventStore(":memory:", "")
+	migrationsPath := getMigrationsPath(t)
+	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
 	if err != nil {
 		t.Fatalf("failed to create event store: %v", err)
 	}
@@ -199,7 +205,8 @@ func TestEventStoreGetAllEvents(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	store, err := NewSQLiteEventStore(":memory:", "")
+	migrationsPath := getMigrationsPath(t)
+	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
 	if err != nil {
 		t.Fatalf("failed to create event store: %v", err)
 	}
@@ -253,4 +260,28 @@ func isSkipCGOTests() bool {
 		return true
 	}
 	return false
+}
+
+// getMigrationsPath returns the file:// URL path to the migrations directory.
+func getMigrationsPath(t *testing.T) string {
+	// Get the path of this test file
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not get current file path")
+	}
+	
+	// Navigate from internal/store/eventstore_test.go to migrations/
+	dir := filepath.Join(filepath.Dir(filename), "..", "..", "migrations")
+	absPath, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("could not resolve migrations path: %v", err)
+	}
+	
+	// Verify migrations directory exists
+	if _, err := os.Stat(absPath); err != nil {
+		t.Fatalf("migrations directory not found at %s: %v", absPath, err)
+	}
+	
+	// Convert to file:// URL format
+	return "file://" + filepath.ToSlash(absPath)
 }
