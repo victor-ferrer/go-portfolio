@@ -41,9 +41,9 @@ type SQLiteEventStore struct {
 }
 
 // NewSQLiteEventStore creates a new SQLite event store.
-// If dsn is ":memory:", it creates an in-memory database.
+// If dsn is ":memory:", it creates an in-memory database without migrations.
 // migrationsPath should be the directory containing migration files (e.g., "file://./migrations").
-// If migrationsPath is empty, uses built-in migrations.
+// For production, migrationsPath should point to the migrations directory.
 func NewSQLiteEventStore(dsn, migrationsPath string) (*SQLiteEventStore, error) {
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
@@ -58,13 +58,7 @@ func NewSQLiteEventStore(dsn, migrationsPath string) (*SQLiteEventStore, error) 
 
 	// Run migrations
 	if migrationsPath != "" {
-		// Use golang-migrate with external migration files
 		if err := store.MigrateWithPath(migrationsPath); err != nil {
-			return nil, fmt.Errorf("failed to run migrations: %w", err)
-		}
-	} else {
-		// Use built-in migrations
-		if err := RunMigrations(context.Background(), store); err != nil {
 			return nil, fmt.Errorf("failed to run migrations: %w", err)
 		}
 	}
