@@ -8,6 +8,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite3"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"go-portfolio/internal/domain"
@@ -33,12 +36,15 @@ type EventStore interface {
 
 // SQLiteEventStore implements EventStore using SQLite.
 type SQLiteEventStore struct {
-	db *sql.DB
+	db  *sql.DB
+	dsn string
 }
 
 // NewSQLiteEventStore creates a new SQLite event store.
 // If dsn is ":memory:", it creates an in-memory database.
-func NewSQLiteEventStore(dsn string) (*SQLiteEventStore, error) {
+// migrationsPath should be the directory containing migration files (e.g., "file://./migrations").
+// If migrationsPath is empty, uses built-in migrations.
+func NewSQLiteEventStore(dsn, migrationsPath string) (*SQLiteEventStore, error) {
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -48,14 +54,38 @@ func NewSQLiteEventStore(dsn string) (*SQLiteEventStore, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	store := &SQLiteEventStore{db: db}
+	store := &SQLiteEventStore{db: db, dsn: dsn}
 
 	// Run migrations
-	if err := RunMigrations(context.Background(), store); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	if migrationsPath != "" {
+		// Use golang-migrate with external migration files
+		if err := store.MigrateWithPath(migrationsPath); err != nil {
+			return nil, fmt.Errorf("failed to run migrations: %w", err)
+		}
+	} else {
+		// Use built-in migrations
+		if err := RunMigrations(context.Background(), store); err != nil {
+			return nil, fmt.Errorf("failed to run migrations: %w", err)
+		}
 	}
 
 	return store, nil
+}
+
+// MigrateWithPath runs all pending migrations from the specified path using golang-migrate.
+// migrationsPath should be in the format "file://path/to/migrations".
+func (s *SQLiteEventStore) MigrateWithPath(migrationsPath string) error {
+	m, err := migrate.New(migrationsPath, "sqlite3://"+s.dsn)
+	if err != nil {
+		return fmt.Errorf("failed to create migrator: %w", err)
+	}
+	defer m.Close()
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	return nil
 }
 
 // AppendEvent appends an event to the store.
