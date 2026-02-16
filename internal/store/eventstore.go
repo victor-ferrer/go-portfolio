@@ -51,32 +51,11 @@ func NewSQLiteEventStore(dsn string) (*SQLiteEventStore, error) {
 	store := &SQLiteEventStore{db: db}
 
 	// Run migrations
-	if err := store.Migrate(context.Background()); err != nil {
+	if err := RunMigrations(context.Background(), store); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return store, nil
-}
-
-// Migrate creates the events table if it doesn't exist.
-func (s *SQLiteEventStore) Migrate(ctx context.Context) error {
-	schema := `
-	CREATE TABLE IF NOT EXISTS events (
-		id TEXT PRIMARY KEY,
-		aggregate_id TEXT NOT NULL,
-		type TEXT NOT NULL,
-		broker TEXT NOT NULL,
-		imported_at TIMESTAMP NOT NULL,
-		payload TEXT NOT NULL,
-		created_at TIMESTAMP NOT NULL,
-		uniqueness_key TEXT NOT NULL UNIQUE
-	);
-	CREATE INDEX IF NOT EXISTS idx_aggregate_id ON events(aggregate_id);
-	CREATE INDEX IF NOT EXISTS idx_broker ON events(broker);
-	`
-
-	_, err := s.db.ExecContext(ctx, schema)
-	return err
 }
 
 // AppendEvent appends an event to the store.
