@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
-    aggregate_id TEXT NOT NULL,
-    type TEXT NOT NULL,
-    broker TEXT NOT NULL,
+    id VARCHAR(255) PRIMARY KEY,
+    aggregate_id VARCHAR(255) NOT NULL,
+    type VARCHAR(255) NOT NULL,
+    broker VARCHAR(255) NOT NULL,
     imported_at TIMESTAMP NOT NULL,
-    payload TEXT NOT NULL,
+    payload JSONB NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    uniqueness_key TEXT NOT NULL UNIQUE
+    uniqueness_key VARCHAR(64) NOT NULL UNIQUE
 );
 
 CREATE INDEX IF NOT EXISTS idx_aggregate_id ON events(aggregate_id);
