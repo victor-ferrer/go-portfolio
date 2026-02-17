@@ -25,17 +25,17 @@ clean:
 	go clean
 
 docker-up:
-	docker-compose up -d
+	docker compose up -d
 	@echo "Waiting for PostgreSQL to be ready..."
 	@sleep 3
-	@docker-compose exec -T postgres pg_isready -U portfolio -d go-portfolio || sleep 2
+	@docker compose exec -T postgres pg_isready -U portfolio -d go-portfolio || sleep 2
 	@echo "PostgreSQL is ready!"
 
 docker-down:
-	docker-compose down
+	docker compose down
 
 docker-clean:
-	docker-compose down -v
+	docker compose down -v
 	docker volume rm go-portfolio_postgres_data 2>/dev/null || true
 
 db-setup: docker-up

@@ -70,7 +70,6 @@ func (s *PostgreSQLEventStore) MigrateWithPath(migrationsPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create migrator: %w", err)
 	}
-	defer m.Close()
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run migrations: %w", err)

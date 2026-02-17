@@ -9,7 +9,7 @@ An event-sourced portfolio management system built with Go. This application tra
 - **Automatic Deduplication**: Uniqueness key prevents duplicate transaction imports
 - **Position Tracking**: Calculate open positions and cost basis per instrument
 - **Performance Metrics**: Compute annualized returns and portfolio-wide metrics
-- **SQLite Storage**: Lightweight database with migration support
+- **PostgreSQL Storage**: Production-ready database with Docker support
 
 ## Architecture
 
@@ -64,40 +64,82 @@ The system follows event sourcing principles:
 ### Prerequisites
 
 - Go 1.25 or higher
-- CGO enabled (required for SQLite)
+- Docker and Docker Compose
+- PostgreSQL client (optional, for manual database access)
+
+### Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/victor-ferrer/go-portfolio.git
+   cd go-portfolio
+   ```
+
+2. **Start PostgreSQL database**
+   ```bash
+   make docker-up
+   ```
+
+3. **Set environment variables**
+   ```bash
+   export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+   ```
+   
+   Or copy the example environment file:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your preferred settings
+   ```
+
+4. **Run migrations**
+   Migrations are automatically run when the application starts and connects to the database.
 
 ### Build
 
 ```bash
-go build -o bin/portfolio ./cmd/main
+make build
 ```
 
 ### Run
 
 ```bash
-go run ./cmd/main
+make run
 ```
 
 ### Run Tests
 
 ```bash
-go test ./...
+# Start the database first
+make docker-up
+
+# Set the DATABASE_DSN environment variable
+export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+
+# Run tests
+make test
 ```
+
+### Docker Commands
+
+- `make docker-up`: Start PostgreSQL database
+- `make docker-down`: Stop PostgreSQL database
+- `make docker-clean`: Stop and remove database with volumes
+- `make db-setup`: Start database and display connection instructions
 
 ## Database Schema
 
-The event store uses a single `events` table:
+The event store uses a single `events` table in PostgreSQL:
 
 ```sql
 CREATE TABLE events (
-    id TEXT PRIMARY KEY,
-    aggregate_id TEXT NOT NULL,           -- instrument (e.g., "AAPL")
-    type TEXT NOT NULL,                   -- e.g., "TransactionImported"
-    broker TEXT NOT NULL,                 -- broker name
-    imported_at TIMESTAMP NOT NULL,       -- import timestamp
-    payload TEXT NOT NULL,                -- JSON transaction data
-    created_at TIMESTAMP NOT NULL,        -- event creation time
-    uniqueness_key TEXT NOT NULL UNIQUE   -- deduplication key
+    id VARCHAR(255) PRIMARY KEY,
+    aggregate_id VARCHAR(255) NOT NULL,      -- instrument (e.g., "AAPL")
+    type VARCHAR(255) NOT NULL,              -- e.g., "TransactionImported"
+    broker VARCHAR(255) NOT NULL,            -- broker name
+    imported_at TIMESTAMP NOT NULL,          -- import timestamp
+    payload JSONB NOT NULL,                  -- JSON transaction data
+    created_at TIMESTAMP NOT NULL,           -- event creation time
+    uniqueness_key VARCHAR(64) NOT NULL UNIQUE  -- deduplication key (SHA256)
 );
 ```
 
@@ -123,3 +165,59 @@ Position calculations are performed on-the-fly from events:
 - **Cost Basis**: Track average cost per instrument
 - **Annualized Returns**: Compute returns using compound growth formula
 - **Portfolio Metrics**: Aggregate across all positions with weighted returns
+
+## Environment Variables
+
+The application uses the following environment variables:
+
+- `DATABASE_DSN`: PostgreSQL connection string (required)
+  - Format: `postgres://user:password@host:port/dbname?sslmode=disable`
+  - Example: `postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable`
+
+You can set these variables in a `.env` file (see `.env.example` for template) or export them in your shell.
+
+## Development
+
+### Running with Docker
+
+The easiest way to develop is using Docker for the PostgreSQL database:
+
+```bash
+# Start the database
+make docker-up
+
+# Set the environment variable
+export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+
+# Run the application
+make run
+
+# Run tests
+make test
+
+# Stop the database when done
+make docker-down
+```
+
+### Migrations
+
+Database migrations are managed using [golang-migrate](https://github.com/golang-migrate/migrate). Migrations are automatically applied when the application connects to the database.
+
+Migration files are located in the `migrations/` directory.
+
+## Troubleshooting
+
+### Database Connection Issues
+
+If you encounter connection issues:
+1. Ensure Docker is running: `docker ps`
+2. Check if PostgreSQL container is healthy: `docker compose ps`
+3. Verify DATABASE_DSN is set correctly: `echo $DATABASE_DSN`
+4. Check PostgreSQL logs: `docker compose logs postgres`
+
+### Test Failures
+
+If tests fail:
+1. Ensure the database is running: `make docker-up`
+2. Set DATABASE_DSN environment variable
+3. Clear the database: `make docker-clean && make docker-up`
