@@ -282,6 +282,10 @@ func getMigrationsPath(t *testing.T) string {
 		t.Fatalf("migrations directory not found at %s: %v", absPath, err)
 	}
 	
-	// Convert to file:// URL format
-	return "file://" + filepath.ToSlash(absPath)
+	// Convert to file:// URL format (file:///C:/path on Windows, file:///path on Unix)
+	slashPath := filepath.ToSlash(absPath)
+	if runtime.GOOS == "windows" && len(slashPath) > 2 && slashPath[1] == ':' {
+		return "file:///" + slashPath
+	}
+	return "file://" + slashPath
 }

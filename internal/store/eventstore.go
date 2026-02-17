@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -41,7 +42,7 @@ type SQLiteEventStore struct {
 }
 
 // NewSQLiteEventStore creates a new SQLite event store.
-// If dsn is ":memory:", it creates an in-memory database without migrations.
+// If dsn is ":memory:", it creates an in-memory database and runs migrations if migrationsPath is provided.
 // migrationsPath should be the directory containing migration files (e.g., "file://./migrations").
 // For production, migrationsPath should point to the migrations directory.
 func NewSQLiteEventStore(dsn, migrationsPath string) (*SQLiteEventStore, error) {
@@ -60,6 +61,11 @@ func NewSQLiteEventStore(dsn, migrationsPath string) (*SQLiteEventStore, error) 
 	if migrationsPath != "" {
 		if err := store.MigrateWithPath(migrationsPath); err != nil {
 			return nil, fmt.Errorf("failed to run migrations: %w", err)
+		}
+	} else if dsn == ":memory:" {
+		// For in-memory databases without explicit migrations path, create schema directly
+		if err := store.initializeSchema(); err != nil {
+			return nil, fmt.Errorf("failed to initialize schema: %w", err)
 		}
 	}
 
@@ -219,6 +225,33 @@ func (s *SQLiteEventStore) scanEvents(rows *sql.Rows) ([]domain.Event, error) {
 	return events, nil
 }
 
+// initializeSchema creates the events table directly without using migrations.
+// Used for in-memory databases in tests.
+func (s *SQLiteEventStore) initializeSchema() error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS events (
+		id TEXT PRIMARY KEY,
+		aggregate_id TEXT NOT NULL,
+		type TEXT NOT NULL,
+		broker TEXT NOT NULL,
+		imported_at TIMESTAMP NOT NULL,
+		payload TEXT NOT NULL,
+		created_at TIMESTAMP NOT NULL,
+		uniqueness_key TEXT NOT NULL UNIQUE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_aggregate_id ON events(aggregate_id);
+	CREATE INDEX IF NOT EXISTS idx_broker ON events(broker);
+	CREATE INDEX IF NOT EXISTS idx_created_at ON events(created_at);
+	`
+
+	if _, err := s.db.Exec(schema); err != nil {
+		return fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	return nil
+}
+
 // Close closes the database connection.
 func (s *SQLiteEventStore) Close() error {
 	return s.db.Close()
@@ -226,6 +259,9 @@ func (s *SQLiteEventStore) Close() error {
 
 // isUniqueConstraintError checks if an error is a UNIQUE constraint violation.
 func isUniqueConstraintError(err error) bool {
-	return err != nil && (err.Error() == "UNIQUE constraint failed: events.uniqueness_key" ||
-		err.Error() == "UNIQUE constraint failed")
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "UNIQUE constraint failed") && strings.Contains(errMsg, "uniqueness_key")
 }
