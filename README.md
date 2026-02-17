@@ -30,7 +30,7 @@ The system follows event sourcing principles:
 │   │   ├── event.go               # Event model and uniqueness key computation
 │   │   └── transaction.go         # Transaction model
 │   ├── store/                     # Event store implementation
-│   │   └── eventstore.go          # SQLite event store with deduplication
+│   │   └── eventstore.go          # PostgreSQL event store with deduplication
 │   ├── parsers/                   # Transaction parsers
 │   │   ├── parser.go              # Generic parser interface and ParseAndStore
 │   │   └── click_trade/           # Click Trade broker parser
@@ -46,7 +46,7 @@ The system follows event sourcing principles:
 ## Implementation Status
 
 ✅ **Completed:**
-- Event store layer with SQLite backend
+- Event store layer with PostgreSQL backend
 - Event model with uniqueness key computation (SHA256 hash)
 - Transaction model with quantity and category fields
 - Parser integration with ParseAndStore function
@@ -54,9 +54,9 @@ The system follows event sourcing principles:
 - Position projections (open positions, annualized returns, portfolio metrics)
 - Database migrations
 - Comprehensive test coverage
+- CLI command for importing transactions
 
 🚧 **In Progress:**
-- CLI commands for importing transactions
 - CLI commands for viewing positions and metrics
 
 ## Getting Started
@@ -105,6 +105,46 @@ make build
 ```bash
 make run
 ```
+
+## Usage
+
+### Import Transactions
+
+The `import-file` command allows you to import transaction data from broker CSV files.
+
+**Basic Usage:**
+```bash
+./bin/portfolio import-file --file-name <path-to-csv> --broker <broker-name>
+```
+
+**Example:**
+```bash
+# Set the database connection string
+export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+
+# Import transactions from Click Trade CSV file
+./bin/portfolio import-file --file-name ./data/click-trade-transactions.csv --broker click-trade
+```
+
+**Supported Brokers:**
+- `click-trade`: Click Trade broker CSV format
+
+**Features:**
+- **Automatic Deduplication**: Re-importing the same file will skip duplicate transactions
+- **Error Handling**: Clear error messages for missing files, invalid brokers, or connection issues
+- **Transaction Tracking**: Each imported transaction is stored as an immutable event
+
+**CSV Format Example (Click Trade):**
+The Click Trade CSV should include columns such as:
+- `Trade Date`: Date of the transaction
+- `Booked Amount`: Total transaction amount
+- `Currency`: Transaction currency
+- `Instrument`: Stock/security name
+- `Instrument ISIN`: ISIN code
+- `Type`: Transaction type
+- `Event`: Category (Trade, Corporate Action, etc.)
+- `Quantity`: Number of shares/units
+- `Comment`: Additional description
 
 ### Run Tests
 
