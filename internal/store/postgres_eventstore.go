@@ -7,14 +7,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"go-portfolio/internal/domain"
 )
 
@@ -225,7 +224,10 @@ func isPostgresUniqueConstraintError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errMsg := err.Error()
-	// PostgreSQL error: duplicate key value violates unique constraint "events_uniqueness_key_key"
-	return strings.Contains(errMsg, "duplicate key value") && strings.Contains(errMsg, "uniqueness_key")
+	// Check if error is a PostgreSQL error with unique constraint violation code
+	if pqErr, ok := err.(*pq.Error); ok {
+		// Code 23505 is unique_violation in PostgreSQL
+		return pqErr.Code == "23505" && pqErr.Constraint == "events_uniqueness_key_key"
+	}
+	return false
 }

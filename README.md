@@ -64,7 +64,7 @@ The system follows event sourcing principles:
 ### Prerequisites
 
 - Go 1.25 or higher
-- Docker and Docker Compose
+- Docker 20.10+ and Docker Compose V2 (2.0+)
 - PostgreSQL client (optional, for manual database access)
 
 ### Setup
