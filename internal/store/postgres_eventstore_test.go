@@ -2,15 +2,41 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 
 	"go-portfolio/internal/domain"
 )
+
+// setupTestDB creates a test database connection.
+// It uses DATABASE_DSN environment variable to connect to the PostgreSQL database.
+// If DATABASE_DSN is not set, tests are skipped.
+func setupTestDB(t *testing.T) *PostgreSQLEventStore {
+	t.Helper()
+
+	dsn := os.Getenv("DATABASE_DSN")
+	if dsn == "" {
+		t.Skip("DATABASE_DSN environment variable not set. Run 'docker-compose up -d' and set DATABASE_DSN to run tests.")
+	}
+
+	migrationsPath := getMigrationsPath(t)
+	store, err := NewPostgreSQLEventStore(dsn, migrationsPath)
+	if err != nil {
+		t.Fatalf("failed to create event store: %v", err)
+	}
+
+	// Clean up events table before each test
+	_, err = store.db.Exec("DELETE FROM events")
+	if err != nil {
+		t.Fatalf("failed to clean up events table: %v", err)
+	}
+
+	return store
+}
 
 func TestUniquenessKeyComputation(t *testing.T) {
 	date := time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC)
@@ -28,18 +54,10 @@ func TestUniquenessKeyComputation(t *testing.T) {
 }
 
 func TestEventStoreAppendAndRetrieve(t *testing.T) {
-	// Skip if CGO not enabled
-	if isSkipCGOTests() {
-		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
-	}
+	store := setupTestDB(t)
+	defer store.Close()
 
 	ctx := context.Background()
-	migrationsPath := getMigrationsPath(t)
-	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
-	if err != nil {
-		t.Fatalf("failed to create event store: %v", err)
-	}
-	defer store.Close()
 
 	tx := domain.Transaction{
 		ID:         "tx-1",
@@ -84,18 +102,10 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 }
 
 func TestEventStoreDeduplication(t *testing.T) {
-	// Skip if CGO not enabled
-	if isSkipCGOTests() {
-		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
-	}
+	store := setupTestDB(t)
+	defer store.Close()
 
 	ctx := context.Background()
-	migrationsPath := getMigrationsPath(t)
-	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
-	if err != nil {
-		t.Fatalf("failed to create event store: %v", err)
-	}
-	defer store.Close()
 
 	now := time.Now()
 	uniquenessKey := domain.ComputeUniquenessKey(now, "AAPL", "Trade", 100.0, 5000.0)
@@ -142,30 +152,22 @@ func TestEventStoreDeduplication(t *testing.T) {
 }
 
 func TestEventStoreByBroker(t *testing.T) {
-	// Skip if CGO not enabled
-	if isSkipCGOTests() {
-		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
-	}
+	store := setupTestDB(t)
+	defer store.Close()
 
 	ctx := context.Background()
-	migrationsPath := getMigrationsPath(t)
-	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
-	if err != nil {
-		t.Fatalf("failed to create event store: %v", err)
-	}
-	defer store.Close()
 
 	// Insert events from different brokers
 	for i, broker := range []string{"ClickTrade", "Degiro", "ClickTrade"} {
 		tx := domain.Transaction{
-			ID:         "tx-" + strconv.Itoa(i),
+			ID:         fmt.Sprintf("tx-%d", i),
 			Amount:     5000.0,
 			Quantity:   100.0,
 			Type:       "buy",
 			Category:   "Trade",
 			Instrument: "AAPL",
 			Currency:   "USD",
-			CreatedAt:  time.Now(),
+			CreatedAt:  time.Now().Add(time.Duration(i) * time.Millisecond),
 		}
 
 		event := domain.Event{
@@ -174,7 +176,7 @@ func TestEventStoreByBroker(t *testing.T) {
 			Broker:        broker,
 			ImportedAt:    time.Now(),
 			Payload:       tx,
-			UniquenessKey: domain.ComputeUniquenessKey(time.Now(), "AAPL", "Trade", float64(i), 5000.0),
+			UniquenessKey: domain.ComputeUniquenessKey(tx.CreatedAt, "AAPL", "Trade", float64(i), 5000.0),
 		}
 
 		if err := store.AppendEvent(ctx, event); err != nil {
@@ -199,30 +201,22 @@ func TestEventStoreByBroker(t *testing.T) {
 }
 
 func TestEventStoreGetAllEvents(t *testing.T) {
-	// Skip if CGO not enabled
-	if isSkipCGOTests() {
-		t.Skip("Skipping SQLite tests: CGO_ENABLED=0")
-	}
+	store := setupTestDB(t)
+	defer store.Close()
 
 	ctx := context.Background()
-	migrationsPath := getMigrationsPath(t)
-	store, err := NewSQLiteEventStore(":memory:", migrationsPath)
-	if err != nil {
-		t.Fatalf("failed to create event store: %v", err)
-	}
-	defer store.Close()
 
 	// Insert 3 events
 	for i := 0; i < 3; i++ {
 		tx := domain.Transaction{
-			ID:         "tx-" + strconv.Itoa(i),
+			ID:         fmt.Sprintf("tx-%d", i),
 			Amount:     5000.0,
 			Quantity:   100.0,
 			Type:       "buy",
 			Category:   "Trade",
 			Instrument: "AAPL",
 			Currency:   "USD",
-			CreatedAt:  time.Now(),
+			CreatedAt:  time.Now().Add(time.Duration(i) * time.Millisecond),
 		}
 
 		event := domain.Event{
@@ -231,7 +225,7 @@ func TestEventStoreGetAllEvents(t *testing.T) {
 			Broker:        "ClickTrade",
 			ImportedAt:    time.Now(),
 			Payload:       tx,
-			UniquenessKey: domain.ComputeUniquenessKey(time.Now(), "AAPL", "Trade", float64(i), 5000.0),
+			UniquenessKey: domain.ComputeUniquenessKey(tx.CreatedAt, "AAPL", "Trade", float64(i), 5000.0),
 		}
 
 		if err := store.AppendEvent(ctx, event); err != nil {
@@ -249,19 +243,6 @@ func TestEventStoreGetAllEvents(t *testing.T) {
 	}
 }
 
-// isSkipCGOTests checks if CGO is disabled and tests should be skipped.
-// This is a best-effort check since we can't reliably detect CGO_ENABLED at runtime
-// for the go-sqlite3 driver. If this returns true, tests are skipped.
-func isSkipCGOTests() bool {
-	// Try to ping a test database - if it fails with CGO message, skip
-	// For now, we'll attempt to create a store and check the error
-	_, err := NewSQLiteEventStore(":memory:", "")
-	if err != nil && err.Error() == "failed to ping database: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub" {
-		return true
-	}
-	return false
-}
-
 // getMigrationsPath returns the file:// URL path to the migrations directory.
 func getMigrationsPath(t *testing.T) string {
 	// Get the path of this test file
@@ -269,19 +250,19 @@ func getMigrationsPath(t *testing.T) string {
 	if !ok {
 		t.Fatal("could not get current file path")
 	}
-	
-	// Navigate from internal/store/eventstore_test.go to migrations/
+
+	// Navigate from internal/store/postgres_eventstore_test.go to migrations/
 	dir := filepath.Join(filepath.Dir(filename), "..", "..", "migrations")
 	absPath, err := filepath.Abs(dir)
 	if err != nil {
 		t.Fatalf("could not resolve migrations path: %v", err)
 	}
-	
+
 	// Verify migrations directory exists
 	if _, err := os.Stat(absPath); err != nil {
 		t.Fatalf("migrations directory not found at %s: %v", absPath, err)
 	}
-	
+
 	// Convert to file:// URL format (file:///C:/path on Windows, file:///path on Unix)
 	slashPath := filepath.ToSlash(absPath)
 	if runtime.GOOS == "windows" && len(slashPath) > 2 && slashPath[1] == ':' {
