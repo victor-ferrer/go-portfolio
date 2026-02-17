@@ -144,7 +144,7 @@ internal/
     event.go ✅ (new)
     event_test.go ✅ (tests for uniqueness key)
   store/
-    eventstore.go ✅ (new interface + SQLite impl)
+    eventstore.go ✅ (new interface + PostgreSQL impl)
     eventstore_test.go ✅ (comprehensive tests)
   projections/
     positions.go ✅ (new)
@@ -153,6 +153,9 @@ internal/
     click_trade/
       parser.go ✅ (updated with Quantity and Category)
       parser_test.go ✅ (tests)
+cmd/
+  main/
+    main.go ✅ (CLI with import-file command)
 migrations/
   000001_create_events_table.up.sql ✅
   000001_create_events_table.down.sql ✅
@@ -167,13 +170,13 @@ migrations/
 
 ## Next Steps - TODO
 
-### 8. CLI Commands
-- **File**: `cmd/main/main.go` (to be enhanced)
-- [ ] Command: `import` - import transaction files from brokers
-  - Usage: `portfolio import --broker click_trade --file transactions.csv`
-  - Connects to SQLite database
+### ✅ 8. CLI Commands - PARTIALLY COMPLETED
+- **File**: `cmd/main/main.go` (enhanced)
+- ✅ Command: `import-file` - import transaction files from brokers
+  - Usage: `portfolio import-file --file-name transactions.csv --broker click-trade`
+  - Connects to PostgreSQL database
   - Uses ParseAndStore to import events
-  - Reports number of transactions imported vs duplicates skipped
+  - Reports import success/failure with duplicate warnings
 - [ ] Command: `positions` - view current open positions
   - Usage: `portfolio positions [--instrument AAPL]`
   - Projects open positions from events
@@ -186,12 +189,13 @@ migrations/
   - Usage: `portfolio events [--instrument AAPL] [--broker click_trade]`
 
 ### 9. Configuration
-- [ ] Database connection configuration (default: `./portfolio.db`)
+- ✅ Database connection configuration via DATABASE_DSN environment variable
+- ✅ Migrations path configuration via MIGRATIONS_PATH environment variable (default: file://./migrations)
 - [ ] Support for multiple broker configurations
-- [ ] Environment variable overrides
 
 ### 10. Documentation
 - ✅ Updated README.md with current implementation status
+- ✅ Updated README.md with CLI usage documentation
 - ✅ Updated AGENTS.md with completion checklist
-- [ ] Add examples of CSV import files
-- [ ] Add usage examples for CLI commands (when implemented)
+- ✅ Add examples of CSV import usage in README
+- [ ] Add usage examples for additional CLI commands (when implemented)
