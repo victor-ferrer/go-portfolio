@@ -9,6 +9,7 @@ import (
 
 	"go-portfolio/internal/parsers"
 	"go-portfolio/internal/parsers/click_trade"
+	"go-portfolio/internal/server"
 	"go-portfolio/internal/store"
 )
 
@@ -17,6 +18,9 @@ func main() {
 	importCmd := flag.NewFlagSet("import-file", flag.ExitOnError)
 	fileName := importCmd.String("file-name", "", "Path to the transaction file to import (required)")
 	broker := importCmd.String("broker", "", "Broker name (currently only 'click-trade' is supported) (required)")
+
+	serverCmd := flag.NewFlagSet("server", flag.ExitOnError)
+	addr := serverCmd.String("addr", ":8080", "Address to listen on (default: :8080)")
 
 	// Parse command-line arguments
 	if len(os.Args) < 2 {
@@ -35,6 +39,11 @@ func main() {
 		if err := runImport(*fileName, *broker); err != nil {
 			log.Fatalf("Import failed: %v", err)
 		}
+	case "server":
+		serverCmd.Parse(os.Args[2:])
+		if err := runServer(*addr); err != nil {
+			log.Fatalf("Server failed: %v", err)
+		}
 	default:
 		printUsage()
 		os.Exit(1)
@@ -45,11 +54,14 @@ func printUsage() {
 	fmt.Println("go-portfolio - Portfolio management tool")
 	fmt.Println("\nUsage:")
 	fmt.Println("  portfolio import-file --file-name <path> --broker <broker-name>")
+	fmt.Println("  portfolio server [--addr <address>]")
 	fmt.Println("\nCommands:")
 	fmt.Println("  import-file    Import transactions from a file")
+	fmt.Println("  server         Start the HTTP server")
 	fmt.Println("\nOptions:")
 	fmt.Println("  --file-name    Path to the transaction file")
 	fmt.Println("  --broker       Broker name (currently supported: click-trade)")
+	fmt.Println("  --addr         Address to listen on (default: :8080)")
 }
 
 func runImport(fileName, brokerName string) error {
@@ -104,4 +116,27 @@ func runImport(fileName, brokerName string) error {
 
 	fmt.Println("Import completed successfully!")
 	return nil
+}
+
+func runServer(addr string) error {
+	dsn := os.Getenv("DATABASE_DSN")
+	if dsn == "" {
+		return fmt.Errorf("DATABASE_DSN environment variable is not set")
+	}
+
+	migrationsPath := os.Getenv("MIGRATIONS_PATH")
+	if migrationsPath == "" {
+		migrationsPath = "file://./migrations"
+	}
+
+	eventStore, err := store.NewEventStore(dsn, migrationsPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize event store: %w", err)
+	}
+	defer eventStore.Close()
+
+	router := server.New(eventStore)
+
+	fmt.Printf("Starting server on %s\n", addr)
+	return router.Run(addr)
 }
