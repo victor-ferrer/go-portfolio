@@ -116,6 +116,16 @@ events table:
 - ✅ Indexes on aggregate_id, broker, and created_at for query performance
 - ✅ Migration down script for rollback support
 
+### ✅ 8. HTTP API Server - COMPLETED
+- **Files**: `cmd/server/main.go`, `internal/server/server.go`, `internal/server/controllers/transactions.go`, `internal/repository/transaction_repository.go`
+- ✅ `portfolio-server` binary with `--addr` flag (default `:8080`)
+- ✅ Gin-based HTTP router configured in `internal/server/server.go`
+- ✅ `GET /transactions` endpoint with query parameter filters:
+  - `instrument`, `broker`, `type`, `from` (YYYY-MM-DD), `to` (YYYY-MM-DD)
+- ✅ `TransactionRepository` interface backed by EventStore
+- ✅ Controller unit tests in `internal/server/controllers/transactions_test.go`
+- ✅ Separate import binary (`cmd/import/main.go`) as `portfolio-import`
+
 ## Key Behaviors
 
 ### Deduplication
@@ -153,9 +163,20 @@ internal/
     click_trade/
       parser.go ✅ (updated with Quantity and Category)
       parser_test.go ✅ (tests)
+  repository/
+    transaction_repository.go ✅ (EventStore-backed TransactionRepository)
+  server/
+    server.go ✅ (Gin router setup)
+    controllers/
+      transactions.go ✅ (GET /transactions handler)
+      transactions_test.go ✅ (controller unit tests)
 cmd/
+  import/
+    main.go ✅ (portfolio-import binary)
+  server/
+    main.go ✅ (portfolio-server binary)
   main/
-    main.go ✅ (CLI with import-file command)
+    main.go ✅ (legacy CLI with import-file command)
 migrations/
   000001_create_events_table.up.sql ✅
   000001_create_events_table.down.sql ✅
@@ -170,32 +191,19 @@ migrations/
 
 ## Next Steps - TODO
 
-### ✅ 8. CLI Commands - PARTIALLY COMPLETED
-- **File**: `cmd/main/main.go` (enhanced)
-- ✅ Command: `import-file` - import transaction files from brokers
-  - Usage: `portfolio import-file --file-name transactions.csv --broker click-trade`
-  - Connects to PostgreSQL database
-  - Uses ParseAndStore to import events
-  - Reports import success/failure with duplicate warnings
-- [ ] Command: `positions` - view current open positions
-  - Usage: `portfolio positions [--instrument AAPL]`
-  - Projects open positions from events
-  - Displays: Instrument, Quantity, Average Cost, Current Value, Unrealized Gain
-- [ ] Command: `metrics` - view portfolio-wide metrics
-  - Usage: `portfolio metrics`
-  - Projects portfolio metrics
-  - Displays: Total Value, Total Cost, Unrealized Gain %, Annualized Return
-- [ ] Command: `events` - view raw events (for debugging)
-  - Usage: `portfolio events [--instrument AAPL] [--broker click_trade]`
+### ✅ 9. CLI Commands - COMPLETED
+- ✅ `portfolio-import` binary: import transaction files (`--file-name`, `--broker`)
+- ✅ `portfolio-server` binary: HTTP server for querying transactions (`--addr`)
 
-### 9. Configuration
+### 10. Configuration
 - ✅ Database connection configuration via DATABASE_DSN environment variable
 - ✅ Migrations path configuration via MIGRATIONS_PATH environment variable (default: file://./migrations)
 - [ ] Support for multiple broker configurations
 
-### 10. Documentation
+### 11. Documentation
 - ✅ Updated README.md with current implementation status
 - ✅ Updated README.md with CLI usage documentation
+- ✅ Updated README.md with HTTP API server documentation
 - ✅ Updated AGENTS.md with completion checklist
 - ✅ Add examples of CSV import usage in README
-- [ ] Add usage examples for additional CLI commands (when implemented)
+- ✅ Add HTTP server usage and API endpoint docs in README

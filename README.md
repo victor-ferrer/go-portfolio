@@ -10,6 +10,7 @@ An event-sourced portfolio management system built with Go. This application tra
 - **Position Tracking**: Calculate open positions and cost basis per instrument
 - **Performance Metrics**: Compute annualized returns and portfolio-wide metrics
 - **PostgreSQL Storage**: Production-ready database with Docker support
+- **HTTP API**: Query transactions via a RESTful HTTP server
 
 ## Architecture
 
@@ -24,7 +25,11 @@ The system follows event sourcing principles:
 ```
 .
 ├── cmd/                           # Command-line applications
-│   └── main/                      # Main application entry point
+│   ├── import/                    # Transaction import tool
+│   │   └── main.go                # portfolio-import binary
+│   ├── server/                    # HTTP API server
+│   │   └── main.go                # portfolio-server binary
+│   └── main/                      # Legacy CLI entry point
 ├── internal/                      # Private application code
 │   ├── domain/                    # Domain models
 │   │   ├── event.go               # Event model and uniqueness key computation
@@ -34,9 +39,15 @@ The system follows event sourcing principles:
 │   ├── parsers/                   # Transaction parsers
 │   │   ├── parser.go              # Generic parser interface and ParseAndStore
 │   │   └── click_trade/           # Click Trade broker parser
-│   │       └── parser.go          
-│   └── projections/               # Event projections
-│       └── positions.go           # Position and metrics calculations
+│   │       └── parser.go
+│   ├── projections/               # Event projections
+│   │   └── positions.go           # Position and metrics calculations
+│   ├── repository/                # Data access layer
+│   │   └── transaction_repository.go  # Transaction queries backed by EventStore
+│   └── server/                    # HTTP server
+│       ├── server.go              # Gin router setup and route registration
+│       └── controllers/           # HTTP request handlers
+│           └── transactions.go    # GET /transactions endpoint
 ├── migrations/                    # Database migrations
 │   └── 000001_create_events_table.up.sql
 ├── go.mod                         # Module definition
@@ -54,10 +65,9 @@ The system follows event sourcing principles:
 - Position projections (open positions, annualized returns, portfolio metrics)
 - Database migrations
 - Comprehensive test coverage
-- CLI command for importing transactions
-
-🚧 **In Progress:**
-- CLI commands for viewing positions and metrics
+- CLI tool for importing transactions (`portfolio-import`)
+- HTTP API server with transaction querying (`portfolio-server`)
+- Transaction repository with filtering support
 
 ## Getting Started
 
@@ -100,21 +110,31 @@ The system follows event sourcing principles:
 make build
 ```
 
+This produces two binaries in `bin/`:
+- `bin/portfolio-import` — import transaction CSV files
+- `bin/portfolio-server` — start the HTTP API server
+
 ### Run
 
+**Import transactions:**
 ```bash
 make run
+```
+
+**Start the HTTP server:**
+```bash
+make run-server
 ```
 
 ## Usage
 
 ### Import Transactions
 
-The `import-file` command allows you to import transaction data from broker CSV files.
+The `portfolio-import` tool allows you to import transaction data from broker CSV files.
 
 **Basic Usage:**
 ```bash
-./bin/portfolio import-file --file-name <path-to-csv> --broker <broker-name>
+./bin/portfolio-import --file-name <path-to-csv> --broker <broker-name>
 ```
 
 **Example:**
@@ -123,7 +143,7 @@ The `import-file` command allows you to import transaction data from broker CSV 
 export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
 
 # Import transactions from Click Trade CSV file
-./bin/portfolio import-file --file-name ./data/click-trade-transactions.csv --broker click-trade
+./bin/portfolio-import --file-name ./data/click-trade-transactions.csv --broker click-trade
 ```
 
 **Supported Brokers:**
@@ -145,6 +165,60 @@ The Click Trade CSV should include columns such as:
 - `Event`: Category (Trade, Corporate Action, etc.)
 - `Quantity`: Number of shares/units
 - `Comment`: Additional description
+
+### HTTP API Server
+
+The `portfolio-server` starts an HTTP server for querying stored transactions.
+
+**Start the server:**
+```bash
+export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+./bin/portfolio-server --addr :8080
+```
+
+The `--addr` flag is optional and defaults to `:8080`.
+
+#### Endpoints
+
+**`GET /transactions`** — List all transactions with optional filters.
+
+| Query Parameter | Type   | Description                                      |
+|-----------------|--------|--------------------------------------------------|
+| `instrument`    | string | Filter by instrument name (e.g. `AAPL`)          |
+| `broker`        | string | Filter by broker (e.g. `click-trade`)            |
+| `type`          | string | Filter by transaction type (`buy` or `sell`)     |
+| `from`          | string | Start date inclusive, format `YYYY-MM-DD`        |
+| `to`            | string | End date inclusive, format `YYYY-MM-DD`          |
+
+**Examples:**
+```bash
+# Get all transactions
+curl http://localhost:8080/transactions
+
+# Filter by instrument
+curl "http://localhost:8080/transactions?instrument=AAPL"
+
+# Filter by broker and date range
+curl "http://localhost:8080/transactions?broker=click-trade&from=2024-01-01&to=2024-12-31"
+
+# Filter by type
+curl "http://localhost:8080/transactions?type=buy"
+```
+
+**Response format:**
+```json
+[
+  {
+    "instrument": "AAPL",
+    "type": "buy",
+    "category": "Trade",
+    "amount": 1500.00,
+    "quantity": 10,
+    "currency": "USD",
+    "createdAt": "2024-06-15T00:00:00Z"
+  }
+]
+```
 
 ### Run Tests
 
@@ -210,9 +284,10 @@ Position calculations are performed on-the-fly from events:
 
 The application uses the following environment variables:
 
-- `DATABASE_DSN`: PostgreSQL connection string (required)
+- `DATABASE_DSN`: PostgreSQL connection string (required for both binaries)
   - Format: `postgres://user:password@host:port/dbname?sslmode=disable`
   - Example: `postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable`
+- `MIGRATIONS_PATH`: Path to migration files (optional, defaults to `file://./migrations`)
 
 You can set these variables in a `.env` file (see `.env.example` for template) or export them in your shell.
 
@@ -229,8 +304,11 @@ make docker-up
 # Set the environment variable
 export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
 
-# Run the application
+# Run the import tool
 make run
+
+# Run the HTTP server
+make run-server
 
 # Run tests
 make test
