@@ -2,8 +2,9 @@
 
 help:
 	@echo "Available targets:"
-	@echo "  make build        - Build the application"
-	@echo "  make run          - Run the application"
+	@echo "  make build        - Build all binaries"
+	@echo "  make run          - Run the import tool"
+	@echo "  make run-server   - Run the HTTP server"
 	@echo "  make test         - Run tests"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make docker-up    - Start PostgreSQL database with Docker"
@@ -12,10 +13,14 @@ help:
 	@echo "  make db-setup     - Start database and set up environment for tests"
 
 build:
-	go build -o bin/portfolio ./cmd/main
+	go build -o bin/portfolio-import ./cmd/import
+	go build -o bin/portfolio-server ./cmd/server
 
 run:
-	go run ./cmd/main
+	go run ./cmd/import
+
+run-server:
+	go run ./cmd/server
 
 test:
 	go test ./...
