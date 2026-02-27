@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 
+	"go-portfolio/internal/config"
 	"go-portfolio/internal/parsers"
 	"go-portfolio/internal/parsers/click_trade"
 	"go-portfolio/internal/store"
@@ -49,17 +50,12 @@ func runImport(fileName, brokerName string) error {
 	}
 	defer file.Close()
 
-	dsn := os.Getenv("DATABASE_DSN")
-	if dsn == "" {
-		return fmt.Errorf("DATABASE_DSN environment variable is not set")
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	migrationsPath := os.Getenv("MIGRATIONS_PATH")
-	if migrationsPath == "" {
-		migrationsPath = "file://./migrations"
-	}
-
-	eventStore, err := store.NewEventStore(dsn, migrationsPath)
+	eventStore, err := store.NewEventStore(cfg.DSN(), cfg.MigrationsPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialize event store: %w", err)
 	}
