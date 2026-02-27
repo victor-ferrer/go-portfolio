@@ -6,12 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"go-portfolio/internal/domain"
@@ -19,62 +15,15 @@ import (
 
 // PostgreSQLEventStore implements EventStore using PostgreSQL.
 type PostgreSQLEventStore struct {
-	db  *sql.DB
-	dsn string
+	db *sql.DB
 }
 
-// NewPostgreSQLEventStore creates a new PostgreSQL event store.
-// dsn should be a PostgreSQL connection string (e.g., "postgres://user:pass@host:port/dbname?sslmode=disable").
-// If dsn is empty, it reads from DATABASE_DSN environment variable.
-// migrationsPath should be the directory containing migration files (e.g., "file://./migrations").
-func NewPostgreSQLEventStore(dsn, migrationsPath string) (*PostgreSQLEventStore, error) {
-	// If DSN is not provided, read from environment variable
-	if dsn == "" {
-		dsn = os.Getenv("DATABASE_DSN")
-		if dsn == "" {
-			return nil, fmt.Errorf("DATABASE_DSN environment variable is not set")
-		}
+// NewPostgreSQLEventStore creates a new PostgreSQL event store using an existing database connection.
+func NewPostgreSQLEventStore(db *sql.DB) (*PostgreSQLEventStore, error) {
+	if db == nil {
+		return nil, fmt.Errorf("db must not be nil")
 	}
-
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	store := &PostgreSQLEventStore{db: db, dsn: dsn}
-
-	// Run migrations
-	if migrationsPath != "" {
-		if err := store.MigrateWithPath(migrationsPath); err != nil {
-			return nil, fmt.Errorf("failed to run migrations: %w", err)
-		}
-	}
-
-	return store, nil
-}
-
-// MigrateWithPath runs all pending migrations from the specified path using golang-migrate.
-// migrationsPath should be in the format "file://path/to/migrations".
-func (s *PostgreSQLEventStore) MigrateWithPath(migrationsPath string) error {
-	driver, err := postgres.WithInstance(s.db, &postgres.Config{})
-	if err != nil {
-		return fmt.Errorf("failed to create postgres driver: %w", err)
-	}
-
-	m, err := migrate.NewWithDatabaseInstance(migrationsPath, "postgres", driver)
-	if err != nil {
-		return fmt.Errorf("failed to create migrator: %w", err)
-	}
-
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to run migrations: %w", err)
-	}
-
-	return nil
+	return &PostgreSQLEventStore{db: db}, nil
 }
 
 // AppendEvent appends an event to the store.
