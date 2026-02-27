@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 
 	"go-portfolio/internal/domain"
 )
@@ -24,10 +25,7 @@ type EventStore interface {
 	Close() error
 }
 
-// NewEventStore creates a new event store using PostgreSQL.
-// dsn should be a PostgreSQL connection string (e.g., "postgres://user:pass@host:port/dbname?sslmode=disable").
-// If dsn is empty, it reads from DATABASE_DSN environment variable.
-// migrationsPath should be the directory containing migration files (e.g., "file://./migrations").
-func NewEventStore(dsn, migrationsPath string) (EventStore, error) {
-	return NewPostgreSQLEventStore(dsn, migrationsPath)
+// NewEventStore creates a new event store using the provided PostgreSQL database connection.
+func NewEventStore(db *sql.DB) (EventStore, error) {
+	return NewPostgreSQLEventStore(db)
 }

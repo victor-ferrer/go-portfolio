@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"go-portfolio/internal/config"
+	"go-portfolio/internal/database"
 	"go-portfolio/internal/parsers"
 	"go-portfolio/internal/parsers/click_trade"
 	"go-portfolio/internal/store"
@@ -74,8 +75,13 @@ func runImport(fileName, brokerName string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Initialize event store
-	eventStore, err := store.NewEventStore(cfg.DSN(), cfg.MigrationsPath)
+	db, err := database.Connect(cfg.DSN(), cfg.MigrationsPath)
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
+	}
+	defer db.Close()
+
+	eventStore, err := store.NewEventStore(db)
 	if err != nil {
 		return fmt.Errorf("failed to initialize event store: %w", err)
 	}

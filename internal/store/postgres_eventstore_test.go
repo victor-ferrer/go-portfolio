@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"go-portfolio/internal/database"
 	"go-portfolio/internal/domain"
 )
 
@@ -24,10 +25,17 @@ func setupTestDB(t *testing.T) *PostgreSQLEventStore {
 	}
 
 	migrationsPath := getMigrationsPath(t)
-	store, err := NewPostgreSQLEventStore(dsn, migrationsPath)
+	db, err := database.Connect(dsn, migrationsPath)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+
+	store, err := NewPostgreSQLEventStore(db)
 	if err != nil {
 		t.Fatalf("failed to create event store: %v", err)
 	}
+
+	t.Cleanup(func() { store.Close() })
 
 	// Clean up events table before each test
 	_, err = store.db.Exec("DELETE FROM events")
@@ -55,7 +63,6 @@ func TestUniquenessKeyComputation(t *testing.T) {
 
 func TestEventStoreAppendAndRetrieve(t *testing.T) {
 	store := setupTestDB(t)
-	defer store.Close()
 
 	ctx := context.Background()
 
@@ -103,7 +110,6 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 
 func TestEventStoreDeduplication(t *testing.T) {
 	store := setupTestDB(t)
-	defer store.Close()
 
 	ctx := context.Background()
 
@@ -153,7 +159,6 @@ func TestEventStoreDeduplication(t *testing.T) {
 
 func TestEventStoreByBroker(t *testing.T) {
 	store := setupTestDB(t)
-	defer store.Close()
 
 	ctx := context.Background()
 
@@ -202,7 +207,6 @@ func TestEventStoreByBroker(t *testing.T) {
 
 func TestEventStoreGetAllEvents(t *testing.T) {
 	store := setupTestDB(t)
-	defer store.Close()
 
 	ctx := context.Background()
 
