@@ -1,8 +1,8 @@
-.PHONY: build run test clean help docker-up docker-down docker-clean db-setup
+.PHONY: build run test clean help docker-up docker-down docker-clean db-setup web-install web-build web-dev
 
 help:
 	@echo "Available targets:"
-	@echo "  make build        - Build all binaries"
+	@echo "  make build        - Build all binaries (includes web UI)"
 	@echo "  make run          - Run the import tool"
 	@echo "  make run-server   - Run the HTTP server"
 	@echo "  make test         - Run tests"
@@ -11,8 +11,20 @@ help:
 	@echo "  make docker-down  - Stop PostgreSQL database"
 	@echo "  make docker-clean - Stop and remove PostgreSQL database and volumes"
 	@echo "  make db-setup     - Start database and set up environment for tests"
+	@echo "  make web-install  - Install web UI npm dependencies"
+	@echo "  make web-build    - Build web UI static assets"
+	@echo "  make web-dev      - Start web UI dev server (proxies API to :8080)"
 
-build:
+web-install:
+	cd web && npm install
+
+web-build:
+	cd web && npm run build
+
+web-dev:
+	cd web && npm run dev
+
+build: web-build
 	go build -o bin/portfolio-import ./cmd/import
 	go build -o bin/portfolio-server ./cmd/server
 

@@ -9,6 +9,7 @@ import (
 	"go-portfolio/internal/database"
 	"go-portfolio/internal/server"
 	"go-portfolio/internal/store"
+	webui "go-portfolio/web"
 )
 
 func main() {
@@ -46,7 +47,7 @@ func runServer(addr string) error {
 	}
 	defer eventStore.Close()
 
-	router := server.New(eventStore)
+	router := server.New(eventStore, webui.StaticFiles)
 
 	fmt.Printf("Starting server on %s\n", addr)
 	return router.Run(addr)

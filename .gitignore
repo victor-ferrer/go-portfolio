@@ -33,6 +33,8 @@ Thumbs.db
 # Application specific
 bin/
 dist/
+!web/dist/
+!web/dist/**
 *.log
 .env
 .env.local
