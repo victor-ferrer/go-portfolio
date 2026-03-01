@@ -64,7 +64,12 @@ func (s *PostgreSQLEventStore) AppendEvent(ctx context.Context, event domain.Eve
 	if err != nil {
 		// Check if it's a UNIQUE constraint violation (duplicate)
 		if isPostgresUniqueConstraintError(err) {
-			log.Printf("warning: duplicate event (uniqueness_key=%s), skipping", event.UniquenessKey)
+			log.Printf("warning: duplicate event skipped (instrument=%s, date=%s, category=%s, broker=%s)",
+				event.AggregateID,
+				event.Payload.CreatedAt.Format("2006-01-02"),
+				event.Payload.Category,
+				event.Broker,
+			)
 			return nil
 		}
 		return fmt.Errorf("failed to insert event: %w", err)
