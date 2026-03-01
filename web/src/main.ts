@@ -21,6 +21,8 @@ interface FilterState {
 
 const API_BASE = '/transactions';
 
+let _currentTransactions: Transaction[] = [];
+
 function buildQueryString(filters: FilterState): string {
   const params = new URLSearchParams();
   if (filters.instrument) params.set('instrument', filters.instrument);
@@ -44,11 +46,11 @@ async function fetchTransactions(filters: FilterState): Promise<Transaction[]> {
 
 function formatDate(iso: string): string {
   if (!iso) return '';
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  });
+  const d = new Date(iso);
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 function formatAmount(amount: number, currency: string): string {
@@ -61,20 +63,21 @@ function formatAmount(amount: number, currency: string): string {
 
 function renderTable(transactions: Transaction[]): string {
   if (transactions.length === 0) {
-    return `<tr><td colspan="8" class="empty">No transactions found.</td></tr>`;
+    return `<tr><td colspan="9" class="empty">No transactions found.</td></tr>`;
   }
   return transactions
     .map(
-      (tx) => `
+      (tx, idx) => `
       <tr>
         <td>${formatDate(tx.created_at)}</td>
-        <td><span class="instrument">${tx.instrument}</span></td>
+        <td><span class="instrument" title="${tx.isin || ''}">${tx.instrument}</span></td>
         <td>${tx.isin || '—'}</td>
         <td><span class="badge badge-${tx.type}">${tx.type}</span></td>
         <td>${tx.category}</td>
         <td class="number">${tx.quantity}</td>
         <td class="number">${formatAmount(tx.amount, tx.currency)}</td>
         <td>${tx.description || '—'}</td>
+        <td><button class="btn btn-json" data-tx-idx="${idx}">JSON</button></td>
       </tr>`
     )
     .join('');
@@ -141,15 +144,26 @@ function render(): void {
                 <th>Quantity</th>
                 <th>Amount</th>
                 <th>Description</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="table-body">
-              <tr><td colspan="8" class="empty">Use the filters above and click Search.</td></tr>
+              <tr><td colspan="9" class="empty">Use the filters above and click Search.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
     </main>
+
+    <div id="json-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="json-modal-title">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="json-modal-title">Transaction JSON</h3>
+          <button id="json-modal-close" class="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <pre id="json-modal-content" class="json-content"></pre>
+      </div>
+    </div>
   `;
 
   const form = document.getElementById('filter-form') as HTMLFormElement;
@@ -174,6 +188,7 @@ function render(): void {
 
     try {
       const transactions = await fetchTransactions(filters);
+      _currentTransactions = transactions;
       statusEl.textContent = '';
       countEl.textContent = `${transactions.length} result${transactions.length !== 1 ? 's' : ''}`;
       tbody.innerHTML = renderTable(transactions);
@@ -187,7 +202,30 @@ function render(): void {
   form.addEventListener('reset', () => {
     statusEl.textContent = '';
     countEl.textContent = '';
-    tbody.innerHTML = '<tr><td colspan="8" class="empty">Use the filters above and click Search.</td></tr>';
+    _currentTransactions = [];
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">Use the filters above and click Search.</td></tr>';
+  });
+
+  tbody.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.btn-json') as HTMLElement | null;
+    if (!btn) return;
+    const idx = parseInt(btn.getAttribute('data-tx-idx') || '-1', 10);
+    const tx = _currentTransactions[idx];
+    if (!tx) return;
+    const modal = document.getElementById('json-modal')!;
+    const pre = document.getElementById('json-modal-content')!;
+    pre.textContent = JSON.stringify(tx, null, 2);
+    modal.classList.add('open');
+  });
+
+  document.getElementById('json-modal-close')!.addEventListener('click', () => {
+    document.getElementById('json-modal')!.classList.remove('open');
+  });
+
+  document.getElementById('json-modal')!.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      (e.currentTarget as HTMLElement).classList.remove('open');
+    }
   });
 }
 
