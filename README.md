@@ -20,40 +20,6 @@ The system follows event sourcing principles:
 - Positions and metrics are calculated on-the-fly from event stream
 - Database enforces idempotency via UNIQUE constraint on uniqueness keys
 
-## Project Structure
-
-```
-.
-├── cmd/                           # Command-line applications
-│   ├── import/                    # Transaction import tool
-│   │   └── main.go                # portfolio-import binary
-│   ├── server/                    # HTTP API server
-│   │   └── main.go                # portfolio-server binary
-│   └── main/                      # Legacy CLI entry point
-├── internal/                      # Private application code
-│   ├── domain/                    # Domain models
-│   │   ├── event.go               # Event model and uniqueness key computation
-│   │   └── transaction.go         # Transaction model
-│   ├── store/                     # Event store implementation
-│   │   └── eventstore.go          # PostgreSQL event store with deduplication
-│   ├── parsers/                   # Transaction parsers
-│   │   ├── parser.go              # Generic parser interface and ParseAndStore
-│   │   └── click_trade/           # Click Trade broker parser
-│   │       └── parser.go
-│   ├── projections/               # Event projections
-│   │   └── positions.go           # Position and metrics calculations
-│   ├── repository/                # Data access layer
-│   │   └── transaction_repository.go  # Transaction queries backed by EventStore
-│   └── server/                    # HTTP server
-│       ├── server.go              # Gin router setup and route registration
-│       └── controllers/           # HTTP request handlers
-│           └── transactions.go    # GET /transactions endpoint
-├── migrations/                    # Database migrations
-│   └── 000001_create_events_table.up.sql
-├── go.mod                         # Module definition
-└── go.sum                         # Module checksums
-```
-
 ## Implementation Status
 
 ✅ **Completed:**
@@ -74,6 +40,7 @@ The system follows event sourcing principles:
 ### Prerequisites
 
 - Go 1.25 or higher
+- Node.js 18+ and npm (for building the web UI)
 - Docker 20.10+ and Docker Compose V2 (2.0+)
 - PostgreSQL client (optional, for manual database access)
 
@@ -92,7 +59,11 @@ The system follows event sourcing principles:
 
 3. **Set environment variables**
    ```bash
-   export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+   export DB_HOST=localhost
+   export DB_PORT=5432
+   export DB_NAME=go-portfolio
+   export DB_USER=portfolio
+   export DB_PASSWORD=portfolio
    ```
    
    Or copy the example environment file:
@@ -107,6 +78,9 @@ The system follows event sourcing principles:
 ### Build
 
 ```bash
+# Install web UI dependencies (first time only)
+make web-install
+
 make build
 ```
 
@@ -139,8 +113,8 @@ The `portfolio-import` tool allows you to import transaction data from broker CS
 
 **Example:**
 ```bash
-# Set the database connection string
-export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+# Set the database environment variables
+export DB_HOST=localhost DB_PORT=5432 DB_NAME=go-portfolio DB_USER=portfolio DB_PASSWORD=portfolio
 
 # Import transactions from Click Trade CSV file
 ./bin/portfolio-import --file-name ./data/click-trade-transactions.csv --broker click-trade
@@ -194,7 +168,7 @@ The `portfolio-server` starts an HTTP server for querying stored transactions.
 
 **Start the server:**
 ```bash
-export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+export DB_HOST=localhost DB_PORT=5432 DB_NAME=go-portfolio DB_USER=portfolio DB_PASSWORD=portfolio
 ./bin/portfolio-server --addr :8080
 ```
 
@@ -248,8 +222,8 @@ curl "http://localhost:8080/transactions?type=buy"
 # Start the database first
 make docker-up
 
-# Set the DATABASE_DSN environment variable
-export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+# Set the database environment variables
+export DB_HOST=localhost DB_PORT=5432 DB_NAME=go-portfolio DB_USER=portfolio DB_PASSWORD=portfolio
 
 # Run tests
 make test
@@ -307,9 +281,12 @@ Position calculations are performed on-the-fly from events:
 
 The application uses the following environment variables:
 
-- `DATABASE_DSN`: PostgreSQL connection string (required for both binaries)
-  - Format: `postgres://user:password@host:port/dbname?sslmode=disable`
-  - Example: `postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable`
+- `DB_HOST`: PostgreSQL host (required)
+- `DB_PORT`: PostgreSQL port (required)
+- `DB_NAME`: PostgreSQL database name (required)
+- `DB_USER`: PostgreSQL username (required)
+- `DB_PASSWORD`: PostgreSQL password (required)
+- `DB_SSLMODE`: SSL mode (optional, defaults to `disable`)
 - `MIGRATIONS_PATH`: Path to migration files (optional, defaults to `file://./migrations`)
 
 You can set these variables in a `.env` file (see `.env.example` for template) or export them in your shell.
@@ -324,8 +301,8 @@ The easiest way to develop is using Docker for the PostgreSQL database:
 # Start the database
 make docker-up
 
-# Set the environment variable
-export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?sslmode=disable"
+# Set the database environment variables
+export DB_HOST=localhost DB_PORT=5432 DB_NAME=go-portfolio DB_USER=portfolio DB_PASSWORD=portfolio
 
 # Run the import tool
 make run
@@ -353,12 +330,12 @@ Migration files are located in the `migrations/` directory.
 If you encounter connection issues:
 1. Ensure Docker is running: `docker ps`
 2. Check if PostgreSQL container is healthy: `docker compose ps`
-3. Verify DATABASE_DSN is set correctly: `echo $DATABASE_DSN`
+3. Verify `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` are set correctly
 4. Check PostgreSQL logs: `docker compose logs postgres`
 
 ### Test Failures
 
 If tests fail:
 1. Ensure the database is running: `make docker-up`
-2. Set DATABASE_DSN environment variable
+2. Set the `DB_*` environment variables (see [Environment Variables](#environment-variables))
 3. Clear the database: `make docker-clean && make docker-up`
