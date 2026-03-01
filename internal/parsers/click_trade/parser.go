@@ -111,12 +111,20 @@ func (p *Parser) parseRow(record []string, columnIndex map[string]int) (domain.T
 		tx.Type = strings.TrimSpace(record[idx])
 	}
 
-	// Category from Event or Transaction Type
+	// Category, Quantity, and Price from Event field
+	// Event field can be a plain string (e.g. "Exchange") or a structured string
+	// like "Buy 70 @ 44.71 USD" or "Sell -1335 @ 3.94 EUR".
 	if idx, ok := columnIndex["Event"]; ok && idx < len(record) {
-		tx.Category = strings.TrimSpace(record[idx])
+		eventStr := strings.TrimSpace(record[idx])
+		category, quantity, price, ok := parseEventField(eventStr)
+		tx.Category = category
+		if ok {
+			tx.Quantity = quantity
+			tx.Price = price
+		}
 	}
 
-	// Quantity - extract from "Quantity" column or derive from Amount and Price
+	// Quantity column (overrides event-derived quantity if present)
 	if idx, ok := columnIndex["Quantity"]; ok && idx < len(record) {
 		quantityStr := strings.TrimSpace(record[idx])
 		quantityStr = strings.ReplaceAll(quantityStr, ",", ".")
@@ -146,4 +154,26 @@ func (p *Parser) parseRow(record []string, columnIndex map[string]int) (domain.T
 	}
 
 	return tx, nil
+}
+
+// parseEventField parses an event string like "Buy 70 @ 44.71 USD" or
+// "Sell -1335 @ 3.94 EUR" into its components.
+// Returns (category, quantity, price, true) on success, or (eventStr, 0, 0, false)
+// when the string doesn't match the structured format.
+func parseEventField(event string) (category string, quantity float64, price float64, ok bool) {
+	parts := strings.Fields(event)
+	// Expected format: <Category> <Quantity> @ <Price> [<Currency>]
+	if len(parts) >= 4 && parts[2] == "@" {
+		qtyStr := strings.ReplaceAll(parts[1], ",", ".")
+		qty, err1 := strconv.ParseFloat(qtyStr, 64)
+		priceStr := strings.ReplaceAll(parts[3], ",", ".")
+		prc, err2 := strconv.ParseFloat(priceStr, 64)
+		if err1 == nil && err2 == nil {
+			if qty < 0 {
+				qty = -qty
+			}
+			return parts[0], qty, prc, true
+		}
+	}
+	return event, 0, 0, false
 }
