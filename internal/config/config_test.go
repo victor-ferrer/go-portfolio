@@ -87,32 +87,6 @@ func TestLoad_missingRequired(t *testing.T) {
 	}
 }
 
-func TestLoad_withDatabaseDSN(t *testing.T) {
-	t.Setenv("DATABASE_DSN", "postgres://user:pass@db:5432/mydb?sslmode=disable")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-	expected := "postgres://user:pass@db:5432/mydb?sslmode=disable"
-	if got := cfg.DSN(); got != expected {
-		t.Errorf("expected DSN %q, got %q", expected, got)
-	}
-	if cfg.MigrationsPath != "file://./migrations" {
-		t.Errorf("expected default MigrationsPath, got %s", cfg.MigrationsPath)
-	}
-}
-
-func TestLoad_withDatabaseDSN_skipsIndividualVars(t *testing.T) {
-	t.Setenv("DATABASE_DSN", "postgres://user:pass@db:5432/mydb?sslmode=disable")
-	// DB_HOST etc. are intentionally absent; Load should not fail.
-
-	_, err := Load()
-	if err != nil {
-		t.Fatalf("expected no error when DATABASE_DSN is set, got: %v", err)
-	}
-}
-
 func TestDSN(t *testing.T) {
 	cfg := &Config{
 		DBHost:     "localhost",

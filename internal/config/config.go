@@ -15,35 +15,20 @@ type Config struct {
 	DBPassword     string
 	DBSSLMode      string
 	MigrationsPath string
-	// dsnOverride holds the value of DATABASE_DSN when set; callers always
-	// access the connection string via DSN(), so this field is intentionally
-	// unexported.
-	dsnOverride string
 }
 
 // Load reads configuration from environment variables and returns a Config.
-// If DATABASE_DSN is set, it is used directly and individual DB_* variables are not required.
-// Otherwise, the following variables are required: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD.
+// Required variables: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD.
 // Optional: DB_SSLMODE (default: "disable"), MIGRATIONS_PATH (default: "file://./migrations").
 func Load() (*Config, error) {
-	cfg := &Config{}
-
-	cfg.MigrationsPath = os.Getenv("MIGRATIONS_PATH")
-	if cfg.MigrationsPath == "" {
-		cfg.MigrationsPath = "file://./migrations"
+	cfg := &Config{
+		DBHost:     os.Getenv("DB_HOST"),
+		DBPort:     os.Getenv("DB_PORT"),
+		DBName:     os.Getenv("DB_NAME"),
+		DBUser:     os.Getenv("DB_USER"),
+		DBPassword: os.Getenv("DB_PASSWORD"),
+		DBSSLMode:  os.Getenv("DB_SSLMODE"),
 	}
-
-	if dsn := os.Getenv("DATABASE_DSN"); dsn != "" {
-		cfg.dsnOverride = dsn
-		return cfg, nil
-	}
-
-	cfg.DBHost = os.Getenv("DB_HOST")
-	cfg.DBPort = os.Getenv("DB_PORT")
-	cfg.DBName = os.Getenv("DB_NAME")
-	cfg.DBUser = os.Getenv("DB_USER")
-	cfg.DBPassword = os.Getenv("DB_PASSWORD")
-	cfg.DBSSLMode = os.Getenv("DB_SSLMODE")
 
 	if cfg.DBHost == "" {
 		return nil, fmt.Errorf("DB_HOST environment variable is not set")
@@ -65,15 +50,16 @@ func Load() (*Config, error) {
 		cfg.DBSSLMode = "disable"
 	}
 
+	cfg.MigrationsPath = os.Getenv("MIGRATIONS_PATH")
+	if cfg.MigrationsPath == "" {
+		cfg.MigrationsPath = "file://./migrations"
+	}
+
 	return cfg, nil
 }
 
 // DSN builds and returns a PostgreSQL connection string from the configuration fields.
-// If DATABASE_DSN was provided, it is returned directly.
 func (c *Config) DSN() string {
-	if c.dsnOverride != "" {
-		return c.dsnOverride
-	}
 	u := &url.URL{
 		Scheme: "postgres",
 		User:   url.UserPassword(c.DBUser, c.DBPassword),

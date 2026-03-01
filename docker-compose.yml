@@ -23,7 +23,11 @@ services:
       dockerfile: Dockerfile.server
     container_name: go-portfolio-server
     environment:
-      DATABASE_DSN: postgres://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD:-portfolio}@postgres:5432/${POSTGRES_DB:-go-portfolio}?sslmode=disable
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-go-portfolio}
+      DB_USER: ${POSTGRES_USER:-portfolio}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-portfolio}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:
