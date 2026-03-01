@@ -20,40 +20,6 @@ The system follows event sourcing principles:
 - Positions and metrics are calculated on-the-fly from event stream
 - Database enforces idempotency via UNIQUE constraint on uniqueness keys
 
-## Project Structure
-
-```
-.
-├── cmd/                           # Command-line applications
-│   ├── import/                    # Transaction import tool
-│   │   └── main.go                # portfolio-import binary
-│   ├── server/                    # HTTP API server
-│   │   └── main.go                # portfolio-server binary
-│   └── main/                      # Legacy CLI entry point
-├── internal/                      # Private application code
-│   ├── domain/                    # Domain models
-│   │   ├── event.go               # Event model and uniqueness key computation
-│   │   └── transaction.go         # Transaction model
-│   ├── store/                     # Event store implementation
-│   │   └── eventstore.go          # PostgreSQL event store with deduplication
-│   ├── parsers/                   # Transaction parsers
-│   │   ├── parser.go              # Generic parser interface and ParseAndStore
-│   │   └── click_trade/           # Click Trade broker parser
-│   │       └── parser.go
-│   ├── projections/               # Event projections
-│   │   └── positions.go           # Position and metrics calculations
-│   ├── repository/                # Data access layer
-│   │   └── transaction_repository.go  # Transaction queries backed by EventStore
-│   └── server/                    # HTTP server
-│       ├── server.go              # Gin router setup and route registration
-│       └── controllers/           # HTTP request handlers
-│           └── transactions.go    # GET /transactions endpoint
-├── migrations/                    # Database migrations
-│   └── 000001_create_events_table.up.sql
-├── go.mod                         # Module definition
-└── go.sum                         # Module checksums
-```
-
 ## Implementation Status
 
 ✅ **Completed:**
