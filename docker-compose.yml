@@ -34,5 +34,24 @@ services:
       postgres:
         condition: service_healthy
 
+  import:
+    build:
+      context: .
+      dockerfile: Dockerfile.import
+    container_name: go-portfolio-import
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-go-portfolio}
+      DB_USER: ${POSTGRES_USER:-portfolio}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-portfolio}
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - import
+
 volumes:
   postgres_data:
