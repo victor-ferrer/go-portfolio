@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"go-portfolio/internal/config"
 	"go-portfolio/internal/database"
@@ -76,9 +78,13 @@ func runImport(fileName, brokerName string) error {
 		return fmt.Errorf("no parser available for broker: %s", brokerName)
 	}
 
+	// Derive failed file path: strip extension, append _failed, re-add extension
+	ext := filepath.Ext(fileName)
+	failedFilePath := strings.TrimSuffix(fileName, ext) + "_failed" + ext
+
 	fmt.Printf("Importing transactions from %s (broker: %s)...\n", fileName, brokerName)
 
-	if err := parsers.ParseAndStore(ctx, brokerName, parser, file, eventStore); err != nil {
+	if err := parsers.ParseAndStore(ctx, brokerName, parser, file, eventStore, failedFilePath); err != nil {
 		return fmt.Errorf("failed to parse and store transactions: %w", err)
 	}
 

@@ -2,6 +2,7 @@ package click_trade
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -14,16 +15,20 @@ func TestParse(t *testing.T) {
 	defer file.Close()
 
 	parser := NewParser()
-	transactions, err := parser.Parse(file)
+	result, err := parser.Parse(file)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	if len(transactions) != 1 {
-		t.Errorf("expected 1 transaction, got %d", len(transactions))
+	if len(result.Transactions) != 1 {
+		t.Errorf("expected 1 transaction, got %d", len(result.Transactions))
 	}
 
-	tx := transactions[0]
+	if len(result.FailedRows) != 0 {
+		t.Errorf("expected 0 failed rows, got %d", len(result.FailedRows))
+	}
+
+	tx := result.Transactions[0]
 
 	// Test ID
 	if tx.ID != "" {
@@ -69,5 +74,30 @@ func TestParse(t *testing.T) {
 	expectedTime, _ := time.Parse("02-Jan-2006", "06-feb-2026")
 	if !tx.CreatedAt.Equal(expectedTime) {
 		t.Errorf("expected CreatedAt %v, got %v", expectedTime, tx.CreatedAt)
+	}
+}
+
+func TestParseInvalidTransactions(t *testing.T) {
+	// CSV with one valid row and one row missing the Instrument field
+	csvData := `Client ID,Trade Date,Value Date,Account ID,Trade ID,Position ID,Corporate Action Id,Bk_Record_ Id,Booking Id,Transaction Type,Event,Booked Amount,Currency,Conversion Rate,Conversion cost,Total cost,Realized P/L,IBAN,IBAN owner name,Comment,Correction reason,Instrument,Instrument Symbol,Instrument ISIN,Instrument currency,Type,Exchange Description,From Derivative,Underlying asset type
+6594837,06-feb-2026,06-feb-2026,15500/SLT5953,,,9498707,2744033532,,Corporate action,Exchange,"17,28",EUR,1,0,0,,,,,,*Delisted 20260127 (Iberdrola SA - Rights),IBE_D:xmce,ES06445809V1,EUR,Rights,BME Spanish Exchanges,No,
+6594837,07-feb-2026,07-feb-2026,15500/SLT5953,,,9498708,2744033533,,Corporate action,Exchange,"10,00",EUR,1,0,0,,,,,,,EMPTY_INSTRUMENT:xmce,ES00000000V1,EUR,Rights,BME Spanish Exchanges,No,`
+
+	parser := NewParser()
+	result, err := parser.Parse(strings.NewReader(csvData))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(result.Transactions) != 1 {
+		t.Errorf("expected 1 valid transaction, got %d", len(result.Transactions))
+	}
+
+	if len(result.FailedRows) != 1 {
+		t.Errorf("expected 1 failed row, got %d", len(result.FailedRows))
+	}
+
+	if len(result.Header) == 0 {
+		t.Error("expected non-empty header")
 	}
 }
