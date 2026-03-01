@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go-portfolio/internal/domain"
+	"go-portfolio/internal/parsers"
 )
 
 // Parser handles parsing of Click Trade data.
@@ -21,14 +22,15 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
-// Parse reads a CSV file and returns a slice of transactions.
-func (p *Parser) Parse(reader io.Reader) ([]domain.Transaction, error) {
+// Parse reads a CSV file and returns a ParseResult containing valid transactions
+// and any raw rows that failed validation (missing required fields).
+func (p *Parser) Parse(reader io.Reader) (parsers.ParseResult, error) {
 	csvReader := csv.NewReader(reader)
-	
+
 	// Read header
 	header, err := csvReader.Read()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read header: %w", err)
+		return parsers.ParseResult{}, fmt.Errorf("failed to read header: %w", err)
 	}
 
 	// Create a map of column names to indices
@@ -37,7 +39,9 @@ func (p *Parser) Parse(reader io.Reader) ([]domain.Transaction, error) {
 		columnIndex[strings.TrimSpace(col)] = i
 	}
 
-	var transactions []domain.Transaction
+	result := parsers.ParseResult{
+		Header: header,
+	}
 
 	// Read data rows
 	for {
@@ -46,19 +50,20 @@ func (p *Parser) Parse(reader io.Reader) ([]domain.Transaction, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read row: %w", err)
+			return parsers.ParseResult{}, fmt.Errorf("failed to read row: %w", err)
 		}
 
 		tx, err := p.parseRow(record, columnIndex)
 		if err != nil {
-			// Log error but continue processing other rows
+			// Row failed validation: collect it for the failed output file
+			result.FailedRows = append(result.FailedRows, record)
 			continue
 		}
 
-		transactions = append(transactions, tx)
+		result.Transactions = append(result.Transactions, tx)
 	}
 
-	return transactions, nil
+	return result, nil
 }
 
 // parseEventField parses an event string like "Buy 70 @ 44.71 USD" or
@@ -84,6 +89,7 @@ func parseEventField(event string) (category string, quantity float64, price flo
 }
 
 // parseRow converts a CSV row into a Transaction.
+// Returns an error if the row is missing required fields (e.g., Instrument).
 func (p *Parser) parseRow(record []string, columnIndex map[string]int) (domain.Transaction, error) {
 	tx := domain.Transaction{}
 
@@ -110,6 +116,11 @@ func (p *Parser) parseRow(record []string, columnIndex map[string]int) (domain.T
 	// Instrument
 	if idx, ok := columnIndex["Instrument"]; ok && idx < len(record) {
 		tx.Instrument = strings.TrimSpace(record[idx])
+	}
+
+	// Validate required fields
+	if tx.Instrument == "" {
+		return domain.Transaction{}, fmt.Errorf("missing required Instrument field")
 	}
 
 	// ISIN
