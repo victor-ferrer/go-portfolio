@@ -16,4 +16,7 @@ COPY migrations /migrations
 
 ENV MIGRATIONS_PATH=file:///migrations
 
+# Mount point for CSV files to import
+VOLUME ["/data"]
+
 ENTRYPOINT ["/portfolio-import"]

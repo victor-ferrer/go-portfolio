@@ -146,6 +146,28 @@ export DATABASE_DSN="postgres://portfolio:portfolio@localhost:5432/go-portfolio?
 ./bin/portfolio-import --file-name ./data/click-trade-transactions.csv --broker click-trade
 ```
 
+**Using Docker:**
+
+Place your CSV files in the `./data` directory, then run the import service via Docker Compose:
+
+```bash
+# Create the data directory if it doesn't exist
+mkdir -p data
+
+# Copy your CSV file into it
+cp /path/to/your/transactions.csv data/
+
+# Start the database (if not already running)
+make docker-up
+
+# Run the import container, passing the file path inside /data
+docker compose --profile import run --rm import \
+  --file-name /data/transactions.csv \
+  --broker click-trade
+```
+
+The `./data` directory on your host is mounted to `/data` inside the container, so any CSV files placed there are accessible to the import tool.
+
 **Supported Brokers:**
 - `click-trade`: Click Trade broker CSV format
 
@@ -239,6 +261,7 @@ make test
 - `make docker-down`: Stop PostgreSQL database
 - `make docker-clean`: Stop and remove database with volumes
 - `make db-setup`: Start database and display connection instructions
+- `docker compose --profile import run --rm import --file-name /data/<file> --broker <broker>`: Run the import tool in Docker (mounts `./data` as `/data`)
 
 ## Database Schema
 
