@@ -46,8 +46,8 @@ func (s *PostgreSQLEventStore) AppendEvent(ctx context.Context, event domain.Eve
 	}
 
 	query := `
-	INSERT INTO events (id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	INSERT INTO events (id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key, price)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err = s.db.ExecContext(ctx, query,
@@ -59,6 +59,7 @@ func (s *PostgreSQLEventStore) AppendEvent(ctx context.Context, event domain.Eve
 		string(payloadJSON),
 		event.CreatedAt,
 		event.UniquenessKey,
+		event.Payload.Price,
 	)
 
 	if err != nil {
@@ -76,7 +77,7 @@ func (s *PostgreSQLEventStore) AppendEvent(ctx context.Context, event domain.Eve
 // GetEvents retrieves all events for a given aggregate (instrument).
 func (s *PostgreSQLEventStore) GetEvents(ctx context.Context, aggregateID string) ([]domain.Event, error) {
 	query := `
-	SELECT id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key
+	SELECT id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key, price
 	FROM events
 	WHERE aggregate_id = $1
 	ORDER BY created_at ASC
@@ -94,7 +95,7 @@ func (s *PostgreSQLEventStore) GetEvents(ctx context.Context, aggregateID string
 // GetEventsByBroker retrieves all events imported from a specific broker.
 func (s *PostgreSQLEventStore) GetEventsByBroker(ctx context.Context, broker string) ([]domain.Event, error) {
 	query := `
-	SELECT id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key
+	SELECT id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key, price
 	FROM events
 	WHERE broker = $1
 	ORDER BY created_at ASC
@@ -112,7 +113,7 @@ func (s *PostgreSQLEventStore) GetEventsByBroker(ctx context.Context, broker str
 // GetAllEvents retrieves all events from the store.
 func (s *PostgreSQLEventStore) GetAllEvents(ctx context.Context) ([]domain.Event, error) {
 	query := `
-	SELECT id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key
+	SELECT id, aggregate_id, type, broker, imported_at, payload, created_at, uniqueness_key, price
 	FROM events
 	ORDER BY created_at ASC
 	`
@@ -133,6 +134,7 @@ func (s *PostgreSQLEventStore) scanEvents(rows *sql.Rows) ([]domain.Event, error
 	for rows.Next() {
 		var event domain.Event
 		var payloadJSON string
+		var price float64
 
 		err := rows.Scan(
 			&event.ID,
@@ -143,6 +145,7 @@ func (s *PostgreSQLEventStore) scanEvents(rows *sql.Rows) ([]domain.Event, error
 			&payloadJSON,
 			&event.CreatedAt,
 			&event.UniquenessKey,
+			&price,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan event: %w", err)
@@ -152,6 +155,10 @@ func (s *PostgreSQLEventStore) scanEvents(rows *sql.Rows) ([]domain.Event, error
 		if err := json.Unmarshal([]byte(payloadJSON), &event.Payload); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
+
+		// The dedicated price column is the authoritative source for price;
+		// overwrite whatever the JSONB payload deserialized to ensure consistency.
+		event.Payload.Price = price
 
 		events = append(events, event)
 	}
