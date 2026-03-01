@@ -69,7 +69,6 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 	tx := domain.Transaction{
 		ID:         "tx-1",
 		Amount:     5000.0,
-		Price:      50.0,
 		Quantity:   100.0,
 		Type:       "buy",
 		Category:   "Trade",
@@ -106,10 +105,6 @@ func TestEventStoreAppendAndRetrieve(t *testing.T) {
 
 	if events[0].Payload.Quantity != 100.0 {
 		t.Errorf("expected quantity 100.0, got %f", events[0].Payload.Quantity)
-	}
-
-	if events[0].Payload.Price != 50.0 {
-		t.Errorf("expected price 50.0, got %f", events[0].Payload.Price)
 	}
 }
 
