@@ -6,6 +6,7 @@ import "time"
 type Transaction struct {
 	ID          string    `json:"id"`
 	Amount      float64   `json:"amount"`       // Total transaction value (price × quantity)
+	Price       float64   `json:"price"`        // Price per instrument
 	Quantity    float64   `json:"quantity"`     // Number of instruments traded
 	Type        string    `json:"type"`         // e.g., "buy", "sell"
 	Category    string    `json:"category"`     // e.g., "Trade", "Corporate Action"
