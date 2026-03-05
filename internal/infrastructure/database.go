@@ -1,4 +1,4 @@
-package database
+package infrastructure
 
 import (
 	"database/sql"
@@ -13,7 +13,7 @@ import (
 // Connect opens a PostgreSQL connection using the provided DSN, verifies connectivity,
 // and runs any pending migrations from migrationsPath.
 // migrationsPath should be a file:// URL pointing to the migrations directory
-// (e.g., "file://./migrations"). If migrationsPath is empty, migrations are skipped.
+// (e.g., "file://./internal/infrastructure/migrations"). If migrationsPath is empty, migrations are skipped.
 func Connect(dsn, migrationsPath string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {

@@ -19,7 +19,7 @@ type Config struct {
 
 // Load reads configuration from environment variables and returns a Config.
 // Required variables: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD.
-// Optional: DB_SSLMODE (default: "disable"), MIGRATIONS_PATH (default: "file://./migrations").
+// Optional: DB_SSLMODE (default: "disable"), MIGRATIONS_PATH (default: "file://./internal/infrastructure/migrations").
 func Load() (*Config, error) {
 	cfg := &Config{
 		DBHost:     os.Getenv("DB_HOST"),
@@ -52,7 +52,7 @@ func Load() (*Config, error) {
 
 	cfg.MigrationsPath = os.Getenv("MIGRATIONS_PATH")
 	if cfg.MigrationsPath == "" {
-		cfg.MigrationsPath = "file://./migrations"
+		cfg.MigrationsPath = "file://./internal/infrastructure/migrations"
 	}
 
 	return cfg, nil

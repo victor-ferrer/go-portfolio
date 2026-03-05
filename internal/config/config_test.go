@@ -21,7 +21,7 @@ func TestLoad_success(t *testing.T) {
 	if cfg.DBSSLMode != "disable" {
 		t.Errorf("expected default DBSSLMode=disable, got %s", cfg.DBSSLMode)
 	}
-	if cfg.MigrationsPath != "file://./migrations" {
+	if cfg.MigrationsPath != "file://./internal/infrastructure/migrations" {
 		t.Errorf("expected default MigrationsPath, got %s", cfg.MigrationsPath)
 	}
 }
