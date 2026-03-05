@@ -287,7 +287,7 @@ The application uses the following environment variables:
 - `DB_USER`: PostgreSQL username (required)
 - `DB_PASSWORD`: PostgreSQL password (required)
 - `DB_SSLMODE`: SSL mode (optional, defaults to `disable`)
-- `MIGRATIONS_PATH`: Path to migration files (optional, defaults to `file://./internal/infrastructure/migrations`)
+- `MIGRATIONS_PATH`: Path to migration files (optional, defaults to `file://./infrastructure/database/migrations`)
 
 You can set these variables in a `.env` file (see `.env.example` for template) or export them in your shell.
 
@@ -321,7 +321,7 @@ make docker-down
 
 Database migrations are managed using [golang-migrate](https://github.com/golang-migrate/migrate). Migrations are automatically applied when the application connects to the database.
 
-Migration files are located in the `internal/infrastructure/migrations/` directory.
+Migration files are located in the `infrastructure/database/migrations/` directory.
 
 ## Troubleshooting
 

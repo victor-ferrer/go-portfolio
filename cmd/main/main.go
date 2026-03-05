@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"go-portfolio/infrastructure/database"
 	"go-portfolio/internal/config"
-	"go-portfolio/internal/infrastructure"
 	"go-portfolio/internal/parsers"
 	"go-portfolio/internal/parsers/click_trade"
 	"go-portfolio/internal/store"
@@ -77,7 +77,7 @@ func runImport(fileName, brokerName string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	db, err := infrastructure.Connect(cfg.DSN(), cfg.MigrationsPath)
+	db, err := database.Connect(cfg.DSN(), cfg.MigrationsPath)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}

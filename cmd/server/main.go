@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	"go-portfolio/infrastructure/database"
 	"go-portfolio/internal/config"
-	"go-portfolio/internal/infrastructure"
 	"go-portfolio/internal/server"
 	"go-portfolio/internal/store"
 	webui "go-portfolio/web"
@@ -35,7 +35,7 @@ func runServer(addr string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	db, err := infrastructure.Connect(cfg.DSN(), cfg.MigrationsPath)
+	db, err := database.Connect(cfg.DSN(), cfg.MigrationsPath)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}

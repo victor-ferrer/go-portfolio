@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"go-portfolio/infrastructure/database"
 	"go-portfolio/internal/domain"
-	"go-portfolio/internal/infrastructure"
 )
 
 // setupTestDB creates a test database connection.
@@ -25,7 +25,7 @@ func setupTestDB(t *testing.T) *PostgreSQLEventStore {
 	}
 
 	migrationsPath := getMigrationsPath(t)
-	db, err := infrastructure.Connect(dsn, migrationsPath)
+	db, err := database.Connect(dsn, migrationsPath)
 	if err != nil {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
@@ -255,8 +255,8 @@ func getMigrationsPath(t *testing.T) string {
 		t.Fatal("could not get current file path")
 	}
 
-	// Navigate from internal/store/postgres_eventstore_test.go to internal/infrastructure/migrations/
-	dir := filepath.Join(filepath.Dir(filename), "..", "infrastructure", "migrations")
+	// Navigate from internal/store/postgres_eventstore_test.go to infrastructure/database/migrations/
+	dir := filepath.Join(filepath.Dir(filename), "..", "..", "infrastructure", "database", "migrations")
 	absPath, err := filepath.Abs(dir)
 	if err != nil {
 		t.Fatalf("could not resolve migrations path: %v", err)

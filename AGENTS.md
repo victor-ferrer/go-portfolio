@@ -110,7 +110,7 @@ events table:
   - Weight-averages annualized returns by cost basis proportion
 
 ### ✅ 7. Database Setup - COMPLETED
-- **File**: `internal/infrastructure/migrations/000001_create_events_table.up.sql`
+- **File**: `infrastructure/database/migrations/000001_create_events_table.up.sql`
 - ✅ SQLite schema creation for events table
 - ✅ UNIQUE(uniquenessKey) constraint
 - ✅ Indexes on aggregate_id, broker, and created_at for query performance
@@ -148,6 +148,12 @@ events table:
 
 ## File Structure
 ```
+infrastructure/
+  database/
+    database.go ✅ (database package with Connect and runMigrations)
+    migrations/
+      000001_create_events_table.up.sql ✅
+      000001_create_events_table.down.sql ✅
 internal/
   domain/
     transaction.go ✅ (enhanced with Quantity field)
@@ -163,11 +169,6 @@ internal/
     click_trade/
       parser.go ✅ (updated with Quantity and Category)
       parser_test.go ✅ (tests)
-  infrastructure/
-    database.go ✅ (new infrastructure package with Connect and runMigrations)
-    migrations/
-      000001_create_events_table.up.sql ✅
-      000001_create_events_table.down.sql ✅
   repository/
     transaction_repository.go ✅ (EventStore-backed TransactionRepository)
   server/
@@ -199,7 +200,7 @@ cmd/
 
 ### 10. Configuration
 - ✅ Database connection configuration via DATABASE_DSN environment variable
-- ✅ Migrations path configuration via MIGRATIONS_PATH environment variable (default: file://./internal/infrastructure/migrations)
+- ✅ Migrations path configuration via MIGRATIONS_PATH environment variable (default: file://./infrastructure/database/migrations)
 - [ ] Support for multiple broker configurations
 
 ### 11. Documentation
